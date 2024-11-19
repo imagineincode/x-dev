@@ -1,54 +1,40 @@
-// config/env.go
 package config
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/joho/godotenv" //go get github.com/joho/godotenv
+	"github.com/joho/godotenv"
 )
 
-// Method 1: Using godotenv library
-func LoadEnvConfig() (string, error) {
+// OAuthCredentials stores the OAuth 1.0a credentials
+type OAuthCredentials struct {
+	ConsumerKey       string
+	ConsumerSecret    string
+	AccessToken       string
+	AccessTokenSecret string
+}
+
+// LoadOAuthConfig loads OAuth 1.0a credentials from the .env file
+func LoadOAuthConfig() (*OAuthCredentials, error) {
 	if err := godotenv.Load(); err != nil {
-		return "", fmt.Errorf("error loading .env file: %v", err)
+		return nil, fmt.Errorf("error loading .env file: %v", err)
 	}
 
-	token := os.Getenv("TWITTER_BEARER_TOKEN")
-	if token == "" {
-		return "", fmt.Errorf("TWITTER_BEARER_TOKEN is not set in .env file")
+	consumerKey := os.Getenv("TWITTER_CONSUMER_KEY")
+	consumerSecret := os.Getenv("TWITTER_CONSUMER_SECRET")
+	accessToken := os.Getenv("TWITTER_ACCESS_TOKEN")
+	accessTokenSecret := os.Getenv("TWITTER_ACCESS_TOKEN_SECRET")
+
+	// Ensure all required credentials are set
+	if consumerKey == "" || consumerSecret == "" || accessToken == "" || accessTokenSecret == "" {
+		return nil, fmt.Errorf("one or more required environment variables are missing: TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET")
 	}
 
-	return token, nil
-}
-
-// Method 2: Direct environment variable
-func LoadDirectEnvConfig() (string, error) {
-	token := os.Getenv("TWITTER_BEARER_TOKEN")
-	if token == "" {
-		return "", fmt.Errorf("TWITTER_BEARER_TOKEN environment variable is not set")
-	}
-
-	return token, nil
-}
-
-// Method 3: Environment with fallback to file
-func LoadEnvWithFallback(configPath string) (string, error) {
-	// Try environment first
-	token := os.Getenv("TWITTER_BEARER_TOKEN")
-	if token != "" {
-		return token, nil
-	}
-
-	// Fallback to .env file
-	if err := godotenv.Load(configPath); err != nil {
-		return "", fmt.Errorf("error loading .env file: %v", err)
-	}
-
-	token = os.Getenv("TWITTER_BEARER_TOKEN")
-	if token == "" {
-		return "", fmt.Errorf("TWITTER_BEARER_TOKEN is not set in environment or .env file")
-	}
-
-	return token, nil
+	return &OAuthCredentials{
+		ConsumerKey:       consumerKey,
+		ConsumerSecret:    consumerSecret,
+		AccessToken:       accessToken,
+		AccessTokenSecret: accessTokenSecret,
+	}, nil
 }

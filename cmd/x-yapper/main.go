@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"x-dev/config"
+
+	"github.com/dghubble/oauth1"
 )
 
 type MutedWord struct {
@@ -20,40 +22,43 @@ type MutedWord struct {
 type Client struct {
 	httpClient *http.Client
 	baseURL    string
-	token      string
 }
 
-// NewClient creates a new Twitter API client
-func NewClient(token string) *Client {
+func NewClient(consumerKey, consumerSecret, accessToken, accessTokenSecret string) *Client {
+	config := oauth1.NewConfig(consumerKey, consumerSecret)
+	token := oauth1.NewToken(accessToken, accessTokenSecret)
+
+	httpClient := config.Client(oauth1.NoContext, token)
+
 	return &Client{
-		httpClient: &http.Client{},
+		httpClient: httpClient,
 		baseURL:    "https://api.twitter.com/2",
-		token:      token,
 	}
 }
 
-// createRequest creates an HTTP request with proper headers
 func (c *Client) createRequest(method, url string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Add("Authorization", "Bearer "+c.token)
 	req.Header.Add("Content-Type", "application/json")
 	return req, nil
 }
 
 func main() {
-	// Load configuration from .env
-	token, err := config.LoadEnvConfig()
+	oauthCredentials, err := config.LoadOAuthConfig()
 	if err != nil {
-		log.Fatalf("Error loading config: %v", err)
+		log.Fatalf("Error loading OAuth config: %v", err)
 	}
 
-	client := NewClient(token)
+	consumerKey := oauthCredentials.ConsumerKey
+	consumerSecret := oauthCredentials.ConsumerSecret
+	accessToken := oauthCredentials.AccessToken
+	accessTokenSecret := oauthCredentials.AccessTokenSecret
 
-	// Simple command-line interface
+	client := NewClient(consumerKey, consumerSecret, accessToken, accessTokenSecret)
+
 	for {
 		fmt.Println("\nTwitter Muted Words Manager")
 		fmt.Println("1. List muted words")
@@ -155,12 +160,13 @@ func (c *Client) getUserID() (string, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
 	}
+	fmt.Printf("userID: %s", result.Data.ID)
 
 	return result.Data.ID, nil
 }
 
 func (c *Client) listMutedWords(userID string) ([]MutedWord, error) {
-	req, err := c.createRequest("GET", fmt.Sprintf("%s/users/%s/muted_words", c.baseURL, userID), nil)
+	req, err := c.createRequest("GET", fmt.Sprintf("%s/users/%s/muting", c.baseURL, userID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +202,7 @@ func (c *Client) addMutedWord(userID, word string) error {
 
 	req, err := c.createRequest(
 		"POST",
-		fmt.Sprintf("%s/users/%s/muted_words", c.baseURL, userID),
+		fmt.Sprintf("%s/users/%s/muting", c.baseURL, userID),
 		strings.NewReader(string(jsonData)),
 	)
 	if err != nil {
@@ -219,7 +225,7 @@ func (c *Client) addMutedWord(userID, word string) error {
 func (c *Client) removeMutedWord(userID, wordID string) error {
 	req, err := c.createRequest(
 		"DELETE",
-		fmt.Sprintf("%s/users/%s/muted_words/%s", c.baseURL, userID, wordID),
+		fmt.Sprintf("%s/users/%s/muting/%s", c.baseURL, userID, wordID),
 		nil,
 	)
 	if err != nil {
