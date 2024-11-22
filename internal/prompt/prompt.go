@@ -68,14 +68,14 @@ func (e *Editor) openEditor() (string, error) {
 		return "", fmt.Errorf("failed to read temp file: %w", err)
 	}
 
-	return string(content), nil
+	return strings.TrimRight(string(content), "\n\r\t "), nil
 }
 
 func showPreviewPrompt(content string) (bool, error) {
-	fmt.Println("\nContent Preview:")
-	fmt.Println("--------------")
+	fmt.Println("\nPost Preview")
+	fmt.Println("------------------------------------------")
 	fmt.Println(content)
-	fmt.Println("--------------")
+	fmt.Println("------------------------------------------")
 
 	prompt := promptui.Select{
 		Label: "Choose an action",
@@ -103,14 +103,13 @@ func runPrompts() error {
 		return fmt.Errorf("editor initialization failed: %w", err)
 	}
 
-	//fmt.Printf("Using editor: %s\n", editor.name)
 	fmt.Println(`      
-   \\ / / 
-    \  /  
-    / / 
-   / /\\  
-  / /  \\
-   yapper`)
+    \ \  //  
+     \ \//  
+      \ \ 
+     //\ \
+    //  \ \
+    yapper`)
 	fmt.Println("")
 
 	for {
