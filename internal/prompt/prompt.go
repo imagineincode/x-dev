@@ -71,11 +71,36 @@ func (e *Editor) openEditor() (string, error) {
 	return strings.TrimRight(string(content), "\n\r\t "), nil
 }
 
+func wrapText(text string, lineWidth int) string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
+
+	lines := []string{}
+	currentLine := words[0]
+
+	for _, word := range words[1:] {
+		if len(currentLine)+len(word)+1 > lineWidth {
+			lines = append(lines, currentLine)
+			currentLine = word
+		} else {
+			currentLine += " " + word
+		}
+	}
+
+	lines = append(lines, currentLine)
+	return strings.Join(lines, "\n")
+}
+
 func showPreviewPrompt(content string) (bool, error) {
-	fmt.Println("\nPost Preview")
-	fmt.Println("------------------------------------------")
-	fmt.Println(content)
-	fmt.Println("------------------------------------------")
+	wrappedContent := wrapText(content, 60)
+
+	fmt.Println("\nPost Preview:")
+	fmt.Println("--------------------------------------------------")
+	fmt.Println(wrappedContent)
+	fmt.Println("--------------------------------------------------")
+	fmt.Println("")
 
 	prompt := promptui.Select{
 		Label: "Choose an action",
@@ -109,21 +134,27 @@ func runPrompts() error {
       \ \ 
      //\ \
     //  \ \
-    yapper`)
+     yapper`)
 	fmt.Println("")
 
 	for {
-		prompt := promptui.Prompt{
-			Label:     "Press Enter to start new Post",
-			AllowEdit: true,
+		prompt := promptui.Select{
+			Label: "Choose an action",
+			Items: []string{"Start New Post", "Exit"},
+			Templates: &promptui.SelectTemplates{
+				Label:    "{{ . }}?",
+				Active:   "-> {{ . | cyan }}",
+				Inactive: "  {{ . | white }}",
+				Selected: "\U0001F44D {{ . | green }}",
+			},
 		}
 
-		result, err := prompt.Run()
+		idx, _, err := prompt.Run()
 		if err != nil {
 			return fmt.Errorf("prompt failed: %w", err)
 		}
 
-		if strings.ToLower(strings.TrimSpace(result)) == "exit" {
+		if idx == 1 { // Exit option
 			fmt.Println("Exiting editor...")
 			return nil
 		}
@@ -148,7 +179,7 @@ func runPrompts() error {
 		if shouldSend {
 			fmt.Println("\U00002705 Successfully sent post!")
 		} else {
-			fmt.Println("Post discarded.")
+			fmt.Println("\U0000274C Post discarded.")
 		}
 	}
 }
