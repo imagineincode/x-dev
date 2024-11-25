@@ -7,16 +7,20 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 )
 
@@ -49,6 +53,9 @@ var (
 	authTokenChan  = make(chan string)
 	callbackServer *http.Server
 	scopes         = "tweet.read tweet.write users.read offline.access"
+	cyan           = color.New(color.FgCyan).SprintFunc()
+	red            = color.New(color.FgRed).SprintFunc()
+	green          = color.New(color.FgGreen).SprintFunc()
 )
 
 const (
@@ -56,7 +63,19 @@ const (
 	tokenEndpoint    = "https://api.twitter.com/2/oauth2/token"
 	callbackPort     = "8080"
 	callbackEndpoint = "/callback"
+	maxTweetLength   = 280
 )
+
+func loadConfig() (clientID, clientSecret string, err error) {
+	clientID = os.Getenv("TWITTER_CLIENT_ID")
+	clientSecret = os.Getenv("TWITTER_CLIENT_SECRET")
+
+	if clientID == "" || clientSecret == "" {
+		return "", "", fmt.Errorf("missing required environment variables")
+	}
+
+	return clientID, clientSecret, nil
+}
 
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -78,16 +97,16 @@ func generateCodeChallenge(verifier string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(challenge, "+", "-"), "/", "_")
 }
 
-func getEnvVar(key string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		fmt.Printf("Environment variable %s is not set\n", key)
-		os.Exit(1)
-	}
-	return value
-}
+// func getEnvVar(key string) string {
+// 	value := os.Getenv(key)
+// 	if value == "" {
+// 		fmt.Printf("Environment variable %s is not set\n", key)
+// 		os.Exit(1)
+// 	}
+// 	return value
+// }
 
-func startCallbackServer(wg *sync.WaitGroup) {
+func startCallbackServer(ctx context.Context, wg *sync.WaitGroup) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(callbackEndpoint, handleCallback)
 
@@ -100,7 +119,17 @@ func startCallbackServer(wg *sync.WaitGroup) {
 	go func() {
 		defer wg.Done()
 		if err := callbackServer.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf("HTTP server error: %v", err)
+			log.Printf(red("[ERROR] "), "HTTP server error: %v", err)
+		}
+	}()
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := callbackServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf(red("[ERROR] "), "server shutdown error: %v", err)
 		}
 	}()
 }
@@ -120,7 +149,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		if err := callbackServer.Shutdown(context.Background()); err != nil {
-			log.Printf("Error shutting down server: %v", err)
+			log.Printf(red("[ERROR] "), "error shutting down server: %v", err)
 		}
 	}()
 }
@@ -136,7 +165,7 @@ func exchangeCodeForToken(clientID, clientSecret, code string) (*TokenResponse, 
 
 	req, err := http.NewRequest("POST", tokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("error creating token request: %v", err)
+		return nil, fmt.Errorf(red("[ERROR] "), "error creating token request: %v", err)
 	}
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -144,17 +173,17 @@ func exchangeCodeForToken(clientID, clientSecret, code string) (*TokenResponse, 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error sending token request: %v", err)
+		return nil, fmt.Errorf(red("[ERROR] "), "error sending token request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error getting token, status code: %d", resp.StatusCode)
+		return nil, fmt.Errorf(red("[ERROR] "), "error getting token, status code: %d", resp.StatusCode)
 	}
 
 	var tokenResp TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, fmt.Errorf("error decoding token response: %v", err)
+		return nil, fmt.Errorf(red("[ERROR] "), "error decoding token response: %v", err)
 	}
 
 	return &tokenResp, nil
@@ -166,12 +195,12 @@ func postTweet(text string, accessToken string) error {
 
 	jsonData, err := json.Marshal(tweetReq)
 	if err != nil {
-		return fmt.Errorf("error marshaling tweet request: %v", err)
+		return fmt.Errorf(red("[ERROR] "), "error marshaling tweet request: %v", err)
 	}
 
 	req, err := http.NewRequest("POST", tweetURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("error creating request: %v", err)
+		return fmt.Errorf(red("[ERROR] "), "error creating request: %v", err)
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
@@ -180,14 +209,23 @@ func postTweet(text string, accessToken string) error {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("error sending request: %v", err)
+		return fmt.Errorf(red("[ERROR] "), "error sending request: %v", err)
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error posting tweet, status code: %d", resp.StatusCode)
+		return fmt.Errorf(red("[ERROR] "), "error posting tweet, status code: %d, response: %s",
+			resp.StatusCode, string(body))
 	}
 
+	return nil
+}
+
+func validateTweetLength(text string) error {
+	if len(text) > maxTweetLength {
+		return fmt.Errorf(red("[ERROR] "), "tweet exceeds maximum length of %d characters", maxTweetLength)
+	}
 	return nil
 }
 
@@ -211,14 +249,14 @@ func (ec *EditorConfig) chooseEditor() (*Editor, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no suitable editor found")
+	return nil, fmt.Errorf(red("[ERROR] "), "no suitable editor found")
 }
 
 func (e *Editor) openEditor() (string, error) {
 	timestamp := time.Now().Format("20060102_150405")
 	tmpfile, err := os.CreateTemp("", fmt.Sprintf("posteditor_%s_*.txt", timestamp))
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
+		return "", fmt.Errorf(red("[ERROR] "), "failed to create temp file: %w", err)
 	}
 	tmpfileName := tmpfile.Name()
 	defer os.Remove(tmpfileName)
@@ -230,12 +268,12 @@ func (e *Editor) openEditor() (string, error) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to run editor %s: %w", e.name, err)
+		return "", fmt.Errorf(red("[ERROR] "), "failed to run editor %s: %w", e.name, err)
 	}
 
 	content, err := os.ReadFile(tmpfileName)
 	if err != nil {
-		return "", fmt.Errorf("failed to read temp file: %w", err)
+		return "", fmt.Errorf(red("[ERROR] "), "failed to read temp file: %w", err)
 	}
 
 	return strings.TrimRight(string(content), "\n\r\t "), nil
@@ -285,7 +323,7 @@ func showPreviewPrompt(content string) (bool, error) {
 
 	idx, _, err := prompt.Run()
 	if err != nil {
-		return false, fmt.Errorf("preview selection failed: %w", err)
+		return false, fmt.Errorf(red("[ERROR] "), "preview selection failed: %w", err)
 	}
 
 	return idx == 0, nil // index 0 is "Send Post"
@@ -295,7 +333,7 @@ func runPrompts(tokenResp *TokenResponse) error {
 	config := newEditorConfig()
 	editor, err := config.chooseEditor()
 	if err != nil {
-		return fmt.Errorf("editor initialization failed: %w", err)
+		return fmt.Errorf(red("[ERROR] "), "editor initialization failed: %w", err)
 	}
 
 	fmt.Println(`      
@@ -321,7 +359,7 @@ func runPrompts(tokenResp *TokenResponse) error {
 
 		idx, _, err := prompt.Run()
 		if err != nil {
-			return fmt.Errorf("prompt failed: %w", err)
+			return fmt.Errorf(red("[ERROR] "), "prompt failed: %w", err)
 		}
 
 		if idx == 1 { // Exit option
@@ -331,25 +369,30 @@ func runPrompts(tokenResp *TokenResponse) error {
 
 		content, err := editor.openEditor()
 		if err != nil {
-			log.Printf("Error: %v", err)
-			continue
+			log.Printf(red("[ERROR] "), "error: %v", err)
+			return nil
 		}
 
 		if strings.TrimSpace(content) == "" {
 			fmt.Println("No content entered. Returning to main prompt.")
-			continue
+			return nil
+		}
+
+		if err := validateTweetLength(content); err != nil {
+			fmt.Println(err)
+			return nil
 		}
 
 		shouldSend, err := showPreviewPrompt(content)
 		if err != nil {
-			log.Printf("Preview failed: %v", err)
+			log.Printf(red("[ERROR] "), "preview failed: %v", err)
 			continue
 		}
 
 		if shouldSend {
 			err = postTweet(content, tokenResp.AccessToken)
 			if err != nil {
-				fmt.Printf("Error posting tweet: %v\n", err)
+				fmt.Printf(red("[ERROR] "), "error posting tweet: %v\n", err)
 			} else {
 				fmt.Println("\U00002705 Successfully sent post!")
 			}
@@ -361,19 +404,27 @@ func runPrompts(tokenResp *TokenResponse) error {
 }
 
 func main() {
-	fmt.Println("[OK] getting environment variables.")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	clientID := getEnvVar("TWITTER_CLIENT_ID")
-	clientSecret := getEnvVar("TWITTER_CLIENT_SECRET")
+	fmt.Println(cyan("[INFO] "), "getting environment variables.")
 
-	fmt.Println("[OK] starting authentication service.")
+	clientID, clientSecret, err := loadConfig()
+	if err != nil {
+		log.Printf(red("[ERROR] "), "failed to load configuration: %v", err)
+		log.Printf("Please ensure TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET are set")
+		os.Exit(1)
+	}
+
+	fmt.Println(green("[OK]   "), "environment variables set.")
+	fmt.Println(cyan("[INFO] "), "starting authentication service.")
 
 	codeVerifier = generateCodeVerifier()
 	codeChallenge = generateCodeChallenge(codeVerifier)
 	authState = generateRandomString(32)
 
 	var wg sync.WaitGroup
-	startCallbackServer(&wg)
+	startCallbackServer(ctx, &wg)
 
 	authURL := fmt.Sprintf("\n%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=S256",
 		authEndpoint,
@@ -384,19 +435,27 @@ func main() {
 		codeChallenge,
 	)
 
-	fmt.Printf("\n[INFO] Please open this URL in your browser to authorize the application:\n%s\n", authURL)
+	fmt.Printf("Please open this URL in your browser to authorize the application:\n%s\n", authURL)
 
-	code := <-authTokenChan
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	tokenResponse, err := exchangeCodeForToken(clientID, clientSecret, code)
-	if err != nil {
-		log.Fatalf("[FATAL] Error exchanging code for token: %v", err)
-	}
+	select {
+	case code := <-authTokenChan:
+		tokenResponse, err := exchangeCodeForToken(clientID, clientSecret, code)
+		if err != nil {
+			log.Fatalf(red("[FATAL] "), "error exchanging code for token: %v", err)
+		}
 
-	fmt.Println("[OK] Authentication successful, starting x-yapper...")
+		fmt.Println(green("[OK]  "), "authentication successful, starting x-yapper...")
 
-	if err := runPrompts(tokenResponse); err != nil {
-		log.Fatalf("[FATAL] Error: %v", err)
+		if err := runPrompts(tokenResponse); err != nil {
+			log.Fatalf(red("[FATAL] "), "error: %v", err)
+		}
+
+	case <-sigChan:
+		fmt.Println(cyan("[INFO] "), "received interrupt, shutting down...")
+		cancel()
 	}
 
 	wg.Wait()
