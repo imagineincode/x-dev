@@ -361,8 +361,12 @@ func runPrompts(tokenResp *TokenResponse) error {
 }
 
 func main() {
+	fmt.Println("[OK] getting environment variables.")
+
 	clientID := getEnvVar("TWITTER_CLIENT_ID")
 	clientSecret := getEnvVar("TWITTER_CLIENT_SECRET")
+
+	fmt.Println("[OK] starting authentication service.")
 
 	codeVerifier = generateCodeVerifier()
 	codeChallenge = generateCodeChallenge(codeVerifier)
@@ -371,7 +375,7 @@ func main() {
 	var wg sync.WaitGroup
 	startCallbackServer(&wg)
 
-	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=S256",
+	authURL := fmt.Sprintf("\n%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=S256",
 		authEndpoint,
 		clientID,
 		url.QueryEscape(fmt.Sprintf("http://localhost:%s%s", callbackPort, callbackEndpoint)),
@@ -380,17 +384,19 @@ func main() {
 		codeChallenge,
 	)
 
-	fmt.Printf("Please open this URL in your browser to authorize the application:\n%s\n", authURL)
+	fmt.Printf("\n[INFO] Please open this URL in your browser to authorize the application:\n%s\n", authURL)
 
 	code := <-authTokenChan
 
 	tokenResponse, err := exchangeCodeForToken(clientID, clientSecret, code)
 	if err != nil {
-		log.Fatalf("Error exchanging code for token: %v", err)
+		log.Fatalf("[FATAL] Error exchanging code for token: %v", err)
 	}
 
+	fmt.Println("[OK] Authentication successful, starting x-yapper...")
+
 	if err := runPrompts(tokenResponse); err != nil {
-		log.Fatalf("Error: %v", err)
+		log.Fatalf("[FATAL] Error: %v", err)
 	}
 
 	wg.Wait()
