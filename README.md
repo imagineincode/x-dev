@@ -20,20 +20,30 @@ To use x-yapper, you need an X Developer account (free). The steps below will gu
 1. Visit https://developer.x.com/ and sign-in using your X credentials.
 2. Go through the initial setup steps to configure a new app through the developer portal. 
 3. After you complete the initial configuration (naming app, description, icon, etc.), click on the app through the Dashboard and scroll down to the  **User authentication set up** section and click **Edit**.
-![User authentication set up](./assets/img/user-auth-settings.png)
+
+    <img src="./assets/img/user-auth-settings.png" width="600">
+
 4. Set the following configurations: 
     - **App Permissions**: Read and Write
-    ![app permissions](./assets/img/app-permissions.png)
+
+        <img src="./assets/img/app-permissions.png" width="400">
+
     - **Type of app**: Native App
-    ![type of app](./assets/img/type-of-app.png)
+
+        <img src="./assets/img/type-of-app.png" width="400">
+
     - **App info**:
         - **Callback URL**: `http://localhost:8080/callback`
         - **Website URL**: `http://www.localhost`
     - The remaining configurations are optional.
-    ![app info](./assets/img/app-info.png)
+        
+        <img src="./assets/img/app-info.png" width="400">
+
     - Click **Save**.
 5. At the top of the app page, click the **Keys and Tokens** tab.
-![keys and tokens](./assets/img/keys-and-tokens.png)
+
+    <img src="./assets/img/keys-and-tokens.png" width="200">
+
 6. Create an **OAuth 2.0 Client ID and Client Secret**. Save these to a password manager as you will need to reference them later. 
 
 ### Local Environment Variables
@@ -130,20 +140,31 @@ go build -o x-yapper.exe ./cmd/x-yapper
 ## Using X-Yapper
 
 1. You'll be prompted to open an authentication link to enter you X account credentials.
-![auth link](./assets/img/auth-link.png)
 2. Click the link (cmd + click), or copy/paste the link in your browser. 
-![authorize app](./assets/img/authorize-app.png)
+
+    <img src="./assets/img/authorize-app.png" width="500px">
+
 3. Click **Authorize App**.
 4. You should see the following message in the browser and can close the window:
+
     ```
     Authorization successful! You can close this window.
     ```
+
 5. Select **Start New Post**.
-![start post](./assets/img/start-post.png)
+
+    <img src="./assets/img/start-post.png" width="500">
+
 6. Your local text edit is opened within the terminal, allowing you to type your content. Save the file when done.
-![post edit](./assets/img/post-edit.png)
+
+    <img src="./assets/img/post-edit.png" width="700">
+
 7. You'll be shown a preview of the post, with options to **Send Post** or **Discard**.
-![post preview](./assets/img/post-preview.png)
+
+    <img src="./assets/img/post-preview.png" width="500">
+
 8. After clicking Send Post, you'll receive a confirmation message that the post was successful.
-![post success](./assets/img/post-success.png)
+
+    <img src="./assets/img/post-success.png" width="400">
+
 9. At this point, you can choose to send a new post or exit the app.
