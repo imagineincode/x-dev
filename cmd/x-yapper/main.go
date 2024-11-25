@@ -97,15 +97,6 @@ func generateCodeChallenge(verifier string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(challenge, "+", "-"), "/", "_")
 }
 
-// func getEnvVar(key string) string {
-// 	value := os.Getenv(key)
-// 	if value == "" {
-// 		fmt.Printf("Environment variable %s is not set\n", key)
-// 		os.Exit(1)
-// 	}
-// 	return value
-// }
-
 func startCallbackServer(ctx context.Context, wg *sync.WaitGroup) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(callbackEndpoint, handleCallback)
