@@ -48,7 +48,6 @@ var (
 	codeChallenge  string
 	authTokenChan  = make(chan string)
 	callbackServer *http.Server
-	tokenResponse  *TokenResponse
 	scopes         = "tweet.read tweet.write users.read offline.access"
 )
 
