@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -10,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -91,15 +91,19 @@ func loadConfig() (string, string, error) {
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	r := rand.New(rand.NewPCG(
-		uint64(time.Now().UnixNano()),
-		uint64(time.Now().UnixNano()+1),
-	))
-
+	// Create a slice to store the random bytes
 	b := make([]byte, length)
 
+	// Generate cryptographically secure random bytes
 	for i := range b {
-		b[i] = charset[r.IntN(len(charset))]
+		// Generate a secure random index in the charset
+		randomByte := make([]byte, 1)
+		if _, err := rand.Read(randomByte); err != nil {
+			log.Fatalf("failed to generate random byte: %v", err)
+		}
+
+		// Map the byte to a valid index in the charset
+		b[i] = charset[int(randomByte[0])%len(charset)]
 	}
 
 	return string(b)
@@ -124,8 +128,9 @@ func startCallbackServer(ctx context.Context, wGroup *sync.WaitGroup) {
 	})
 
 	callbackServer = &http.Server{
-		Addr:    ":" + callbackPort,
-		Handler: mux,
+		Addr:              ":" + callbackPort,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	wGroup.Add(1)
@@ -189,11 +194,11 @@ func exchangeCodeForToken(ctx context.Context, clientID, clientSecret, code stri
 	data.Set("code_verifier", codeVerifier)
 	data.Set("redirect_uri", fmt.Sprintf("http://localhost:%s%s", callbackPort, callbackEndpoint))
 
-	req, err := http.NewRequestWithContext(ctx, "POST", tknEndpoint, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tknEndpoint, strings.NewReader(data.Encode()))
 
 	if err != nil {
 
-		return nil, fmt.Errorf("error creating token request: %v", err)
+		return nil, fmt.Errorf("error creating token request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -201,17 +206,42 @@ func exchangeCodeForToken(ctx context.Context, clientID, clientSecret, code stri
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
+			MaxIdleConns:           100,
+			MaxIdleConnsPerHost:    10,
+			IdleConnTimeout:        90 * time.Second,
+			Proxy:                  nil,
+			OnProxyConnectResponse: nil,
+			DialContext:            nil,
+			Dial:                   nil,
+			DialTLSContext:         nil,
+			DialTLS:                nil,
+			TLSClientConfig:        nil,
+			TLSHandshakeTimeout:    0,
+			DisableKeepAlives:      false,
+			DisableCompression:     false,
+			MaxConnsPerHost:        0,
+			ResponseHeaderTimeout:  0,
+			ExpectContinueTimeout:  0,
+			TLSNextProto:           nil,
+			ProxyConnectHeader:     nil,
+			GetProxyConnectHeader:  nil,
+			MaxResponseHeaderBytes: 0,
+			WriteBufferSize:        0,
+			ReadBufferSize:         0,
+			ForceAttemptHTTP2:      false,
 		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+
+			return nil
+		},
+		Jar: nil,
 	}
 
 	resp, err := client.Do(req)
 
 	if err != nil {
 
-		return nil, fmt.Errorf("error sending token request: %v", err)
+		return nil, fmt.Errorf("error sending token request: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -225,7 +255,7 @@ func exchangeCodeForToken(ctx context.Context, clientID, clientSecret, code stri
 
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
 
-		return nil, fmt.Errorf("error decoding token response: %v", err)
+		return nil, fmt.Errorf("error decoding token response: %w", err)
 	}
 
 	return &tokenResp, nil
@@ -237,11 +267,11 @@ func checkAccountType(ctx context.Context, accessToken string) (int, error) {
 
 	userURL := "https://api.twitter.com/2/users/me?user.fields=verified"
 
-	req, err := http.NewRequestWithContext(ctx, "GET", userURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userURL, nil)
 
 	if err != nil {
 
-		return 0, fmt.Errorf("error creating user request: %v", err)
+		return 0, fmt.Errorf("error creating user request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -250,17 +280,42 @@ func checkAccountType(ctx context.Context, accessToken string) (int, error) {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
+			MaxIdleConns:           100,
+			MaxIdleConnsPerHost:    10,
+			IdleConnTimeout:        90 * time.Second,
+			Proxy:                  nil,
+			OnProxyConnectResponse: nil,
+			DialContext:            nil,
+			Dial:                   nil,
+			DialTLSContext:         nil,
+			DialTLS:                nil,
+			TLSClientConfig:        nil,
+			TLSHandshakeTimeout:    0,
+			DisableKeepAlives:      false,
+			DisableCompression:     false,
+			MaxConnsPerHost:        0,
+			ResponseHeaderTimeout:  0,
+			ExpectContinueTimeout:  0,
+			TLSNextProto:           nil,
+			ProxyConnectHeader:     nil,
+			GetProxyConnectHeader:  nil,
+			MaxResponseHeaderBytes: 0,
+			WriteBufferSize:        0,
+			ReadBufferSize:         0,
+			ForceAttemptHTTP2:      false,
 		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+
+			return nil
+		},
+		Jar: nil,
 	}
 
 	resp, err := client.Do(req)
 
 	if err != nil {
 
-		return 0, fmt.Errorf("error sending user request: %v", err)
+		return 0, fmt.Errorf("error sending user request: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -276,14 +331,16 @@ func checkAccountType(ctx context.Context, accessToken string) (int, error) {
 
 	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
 
-		return 0, fmt.Errorf("error decoding user response: %v", err)
+		return 0, fmt.Errorf("error decoding user response: %w", err)
 	}
 
 	if userResp.Data.Verified {
 		maxPostLength = 4000
+
 		fmt.Println(success("[OK] "), "verified account detected. extended post length enabled.")
 	} else {
 		maxPostLength = 280
+
 		fmt.Println(success("[OK] "), "basic account detected. standard post length requirements set.")
 	}
 
@@ -301,14 +358,14 @@ func postTweet(ctx context.Context, text string, accessToken string) error {
 
 	if err != nil {
 
-		return fmt.Errorf("error marshaling tweet request: %v", err)
+		return fmt.Errorf("error marshaling tweet request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", tweetURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tweetURL, bytes.NewBuffer(jsonData))
 
 	if err != nil {
 
-		return fmt.Errorf("error creating request: %v", err)
+		return fmt.Errorf("error creating request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -317,17 +374,42 @@ func postTweet(ctx context.Context, text string, accessToken string) error {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
+			MaxIdleConns:           100,
+			MaxIdleConnsPerHost:    10,
+			IdleConnTimeout:        90 * time.Second,
+			Proxy:                  nil,
+			OnProxyConnectResponse: nil,
+			DialContext:            nil,
+			Dial:                   nil,
+			DialTLSContext:         nil,
+			DialTLS:                nil,
+			TLSClientConfig:        nil,
+			TLSHandshakeTimeout:    0,
+			DisableKeepAlives:      false,
+			DisableCompression:     false,
+			MaxConnsPerHost:        0,
+			ResponseHeaderTimeout:  0,
+			ExpectContinueTimeout:  0,
+			TLSNextProto:           nil,
+			ProxyConnectHeader:     nil,
+			GetProxyConnectHeader:  nil,
+			MaxResponseHeaderBytes: 0,
+			WriteBufferSize:        0,
+			ReadBufferSize:         0,
+			ForceAttemptHTTP2:      false,
 		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+
+			return nil
+		},
+		Jar: nil,
 	}
 
 	resp, err := client.Do(req)
 
 	if err != nil {
 
-		return fmt.Errorf("error sending request: %v", err)
+		return fmt.Errorf("error sending request: %w", err)
 	}
 
 	defer resp.Body.Close()
@@ -336,7 +418,7 @@ func postTweet(ctx context.Context, text string, accessToken string) error {
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 
-		return fmt.Errorf(failed("[ERROR] "), "error posting tweet, status code: %d, response: %s",
+		return fmt.Errorf("error posting tweet, status code: %d, response: %s",
 			resp.StatusCode, string(body))
 	}
 
@@ -367,46 +449,38 @@ func (ec *EditorConfig) chooseEditor() (*Editor, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no suitable editor found")
+	return nil, errors.New("no suitable editor found")
 }
 
-func (e *Editor) openEditor() (string, error) {
+func (e *Editor) openEditor(ctx context.Context) (string, error) {
 	timestamp := time.Now().Format("20060102_150405")
 	tmpfile, err := os.CreateTemp("", fmt.Sprintf("posteditor_%s_*.txt", timestamp))
-
 	if err != nil {
-
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
 
 	tmpfileName := tmpfile.Name()
 	defer os.Remove(tmpfileName)
-	tmpfile.Close()
+	defer tmpfile.Close() // Defer closing the file until after it's used
 
 	editorPath, err := exec.LookPath(e.path)
-
 	if err != nil {
-
 		return "", fmt.Errorf("editor not found: %s", e.path)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
 
 	cmd := exec.CommandContext(ctx, editorPath, tmpfileName)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	// Run the editor with the context's cancellation support
 	if err := cmd.Run(); err != nil {
-
 		return "", fmt.Errorf("failed to run editor %s: %w", e.name, err)
 	}
 
+	// Read the content of the temp file after editor has finished
 	content, err := os.ReadFile(tmpfileName)
-
 	if err != nil {
-
 		return "", fmt.Errorf("failed to read temp file: %w", err)
 	}
 
@@ -472,9 +546,16 @@ func showPreviewPrompt(content string) (bool, error) {
 			Help:     "",
 			FuncMap:  nil,
 		},
-		Size:   0,
-		Stdin:  os.Stdin,
-		Stdout: os.Stdout,
+		Size:              0,
+		Stdin:             os.Stdin,
+		Stdout:            os.Stdout,
+		CursorPos:         0,
+		IsVimMode:         false,
+		HideHelp:          false,
+		HideSelected:      false,
+		Keys:              nil,
+		Searcher:          nil,
+		StartInSearchMode: false,
 	}
 
 	idx, _, err := prompt.Run()
@@ -518,9 +599,16 @@ func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 				Help:     "",
 				FuncMap:  nil,
 			},
-			Size:   0,
-			Stdin:  os.Stdin,
-			Stdout: os.Stdout,
+			Size:              0,
+			Stdin:             os.Stdin,
+			Stdout:            os.Stdout,
+			CursorPos:         0,
+			IsVimMode:         false,
+			HideHelp:          false,
+			HideSelected:      false,
+			Keys:              nil,
+			Searcher:          nil,
+			StartInSearchMode: false,
 		}
 
 		idx, _, err := prompt.Run()
@@ -536,7 +624,7 @@ func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 			return nil
 		}
 
-		content, err := editor.openEditor()
+		content, err := editor.openEditor(ctx)
 
 		if err != nil {
 			log.Printf("error: %v", err)
@@ -586,7 +674,9 @@ func main() {
 	clientID, clientSecret, err := loadConfig()
 
 	if err != nil {
-		log.Fatalf("failed to load configuration: %v", err)
+		log.Printf("failed to load configuration: %v", err)
+		cancel()
+		os.Exit(1)
 	}
 
 	fmt.Println(success("[OK] "), "environment variables set.")
@@ -641,6 +731,7 @@ func main() {
 
 		if err != nil {
 			maxPostLength = 280
+
 			log.Printf("could not determine tweet length limit: %v", err)
 			fmt.Println(info("[INFO] "), "standard post length requirements set.")
 		}
