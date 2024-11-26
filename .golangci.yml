@@ -9,6 +9,7 @@ linters:
     - G404 # insecure random number source (rand)
     - gochecknoglobals # no global variables
     - mnd # magic numbers
+    - varnamelen # var name length
 
 output:
   format: colored-line-number
