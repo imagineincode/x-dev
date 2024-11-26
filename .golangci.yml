@@ -1,0 +1,14 @@
+linters:
+  disable-all: false
+  enable-all: true
+  disable:
+    - maligned
+    - prealloc
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+run:
+  timeout: 5m
