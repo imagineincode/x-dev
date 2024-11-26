@@ -2,16 +2,18 @@ linters:
   disable-all: false
   enable-all: true
   disable:
-    - maligned
     - prealloc
     - err113 # require static error definitions
     - forbidigo # forbid fmt.print*
     - gochecknoglobals # no global variables
     - mnd # magic numbers
     - varnamelen # var name length
+    - funlen # function length
+    - depguard
 
 output:
-  format: colored-line-number
+  formats: 
+    - colored-line-number
   print-issued-lines: true
   print-linter-name: true
 
