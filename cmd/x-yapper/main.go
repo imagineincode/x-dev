@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -79,10 +79,15 @@ func loadConfig() (clientID, clientSecret string, err error) {
 
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	rand.Seed(time.Now().UnixNano())
+
+	r := rand.New(rand.NewPCG(
+		uint64(time.Now().UnixNano()),
+		uint64(time.Now().UnixNano()+1),
+	))
+
 	b := make([]byte, length)
 	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
+		b[i] = charset[r.IntN(len(charset))]
 	}
 	return string(b)
 }
@@ -135,7 +140,12 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte("Authorization successful! You can close this window."))
+	_, err := w.Write([]byte("Authorization successful! You can close this window."))
+	if err != nil {
+		log.Printf("error writing response: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	authTokenChan <- code
 
 	go func() {
@@ -271,25 +281,39 @@ func (e *Editor) openEditor() (string, error) {
 }
 
 func wrapText(text string, lineWidth int) string {
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return ""
-	}
+	text = strings.TrimSpace(text)
 
-	lines := []string{}
-	currentLine := words[0]
+	paragraphs := strings.Split(text, "\n")
+	wrappedParagraphs := []string{}
 
-	for _, word := range words[1:] {
-		if len(currentLine)+len(word)+1 > lineWidth {
-			lines = append(lines, currentLine)
-			currentLine = word
-		} else {
-			currentLine += " " + word
+	for _, paragraph := range paragraphs {
+		if paragraph == "" {
+			continue
 		}
+
+		words := strings.Fields(paragraph)
+		if len(words) == 0 {
+			continue
+		}
+
+		lines := []string{}
+		currentLine := words[0]
+
+		for _, word := range words[1:] {
+			if len(currentLine)+len(word)+1 > lineWidth {
+				lines = append(lines, currentLine)
+				currentLine = word
+			} else {
+				currentLine += " " + word
+			}
+		}
+
+		lines = append(lines, currentLine)
+
+		wrappedParagraphs = append(wrappedParagraphs, strings.Join(lines, "\n"))
 	}
 
-	lines = append(lines, currentLine)
-	return strings.Join(lines, "\n")
+	return strings.Join(wrappedParagraphs, "\n\n")
 }
 
 func showPreviewPrompt(content string) (bool, error) {
