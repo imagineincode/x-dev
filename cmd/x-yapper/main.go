@@ -641,7 +641,7 @@ func main() {
 	if err != nil {
 		log.Printf("failed to load configuration: %v", err)
 		cancel()
-		log.Fatal("Exiting the program due to configuration failure")
+		log.Println(failed("[ERROR] "), "exit app and configure environment variables.")
 	}
 
 	fmt.Println(success("[OK] "), "environment variables set.")
