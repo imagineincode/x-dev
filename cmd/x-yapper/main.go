@@ -36,6 +36,14 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type UserResponse struct {
+	Data struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Verified bool   `json:"verified"`
+	} `json:"data"`
+}
+
 type EditorConfig struct {
 	editors   []string
 	envEditor string
@@ -50,6 +58,7 @@ var (
 	authState      string
 	codeVerifier   string
 	codeChallenge  string
+	maxPostLength  int
 	authTokenChan  = make(chan string)
 	callbackServer *http.Server
 	scopes         = "tweet.read tweet.write users.read offline.access"
@@ -63,7 +72,6 @@ const (
 	tokenEndpoint    = "https://api.twitter.com/2/oauth2/token"
 	callbackPort     = "8080"
 	callbackEndpoint = "/callback"
-	maxTweetLength   = 280
 )
 
 func loadConfig() (clientID, clientSecret string, err error) {
@@ -190,6 +198,46 @@ func exchangeCodeForToken(clientID, clientSecret, code string) (*TokenResponse, 
 	return &tokenResp, nil
 }
 
+func checkAccountType(accessToken string) (int, error) {
+	userURL := "https://api.twitter.com/2/users/me?user.fields=verified"
+
+	req, err := http.NewRequest("GET", userURL, nil)
+	if err != nil {
+		return 0, fmt.Errorf(red("[ERROR] "), "error creating user request: %v", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf(red("[ERROR] "), "error sending user request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf(red("[ERROR] "), "error fetching user info, status code: %d, response: %s",
+			resp.StatusCode, string(bodyBytes))
+	}
+
+	var userResp UserResponse
+	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
+		return 0, fmt.Errorf(red("[ERROR] "), "error decoding user response: %v", err)
+	}
+
+	if userResp.Data.Verified {
+		maxPostLength = 4000
+		fmt.Println(green("[OK] "), "verified account detected. Extended post length enabled.")
+	} else {
+		maxPostLength = 280
+		fmt.Println(green("[OK] "), "basic account detected. Standard post length requirements set.")
+	}
+
+	return maxPostLength, nil
+}
+
 func postTweet(text string, accessToken string) error {
 	tweetURL := "https://api.twitter.com/2/tweets"
 	tweetReq := TweetRequest{Text: text}
@@ -220,13 +268,6 @@ func postTweet(text string, accessToken string) error {
 			resp.StatusCode, string(body))
 	}
 
-	return nil
-}
-
-func validateTweetLength(text string) error {
-	if len(text) > maxTweetLength {
-		return fmt.Errorf(red("[ERROR] "), "tweet exceeds maximum length of %d characters", maxTweetLength)
-	}
 	return nil
 }
 
@@ -393,9 +434,8 @@ func runPrompts(tokenResp *TokenResponse) error {
 			return nil
 		}
 
-		if err := validateTweetLength(content); err != nil {
-			fmt.Println(err)
-			return nil
+		if len(content) > maxPostLength {
+			return fmt.Errorf(red("[ERROR] "), "tweet exceeds maximum length of %d characters", maxPostLength)
 		}
 
 		shouldSend, err := showPreviewPrompt(content)
@@ -438,8 +478,12 @@ func main() {
 	codeChallenge = generateCodeChallenge(codeVerifier)
 	authState = generateRandomString(32)
 
+	fmt.Println(cyan("[INFO] "), "starting callback server.")
+
 	var wg sync.WaitGroup
 	startCallbackServer(ctx, &wg)
+
+	fmt.Println(cyan("[INFO] "), "creating unique authentication URL.")
 
 	authURL := fmt.Sprintf("\n%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=S256",
 		authEndpoint,
@@ -450,7 +494,7 @@ func main() {
 		codeChallenge,
 	)
 
-	fmt.Printf("Please open this URL in your browser to authorize the application:\n%s\n", authURL)
+	fmt.Printf("\nPlease open this URL in your browser to authorize the application:\n%s\n\n", authURL)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -462,7 +506,14 @@ func main() {
 			log.Fatalf(red("[FATAL] "), "error exchanging code for token: %v", err)
 		}
 
-		fmt.Println(green("[OK]  "), "authentication successful, starting x-yapper...")
+		fmt.Println(green("[OK] "), "authentication successful, starting x-yapper...")
+
+		maxPostLength, err = checkAccountType(tokenResponse.AccessToken)
+		if err != nil {
+			maxPostLength = 280
+			log.Printf(red("[ERROR] "), "could not determine tweet length limit: %v", err)
+			fmt.Println(cyan("[INFO] ", "Standard post length requirements set."))
+		}
 
 		if err := runPrompts(tokenResponse); err != nil {
 			log.Fatalf(red("[FATAL] "), "error: %v", err)
