@@ -81,7 +81,6 @@ func loadConfig() (string, string, error) {
 	clientSecret := os.Getenv("TWITTER_CLIENT_SECRET")
 
 	if clientID == "" || clientSecret == "" {
-
 		return "", "", errors.New("missing required environment variables")
 	}
 
@@ -110,7 +109,6 @@ func generateRandomString(length int) string {
 }
 
 func generateCodeVerifier() string {
-
 	return generateRandomString(codeVerifierLength)
 }
 
@@ -131,6 +129,11 @@ func startCallbackServer(ctx context.Context, wGroup *sync.WaitGroup) {
 		Addr:              ":" + callbackPort,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+		ErrorLog:          log.New(os.Stderr, "http: ", log.LstdFlags),
 	}
 
 	wGroup.Add(1)
@@ -165,7 +168,6 @@ func handleCallback(ctx context.Context, w http.ResponseWriter, r *http.Request)
 	}
 
 	_, err := w.Write([]byte("Authorization successful! You can close this window."))
-
 	if err != nil {
 		log.Printf("error writing response: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -195,9 +197,7 @@ func exchangeCodeForToken(ctx context.Context, clientID, clientSecret, code stri
 	data.Set("redirect_uri", fmt.Sprintf("http://localhost:%s%s", callbackPort, callbackEndpoint))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tknEndpoint, strings.NewReader(data.Encode()))
-
 	if err != nil {
-
 		return nil, fmt.Errorf("error creating token request: %w", err)
 	}
 
@@ -231,30 +231,25 @@ func exchangeCodeForToken(ctx context.Context, clientID, clientSecret, code stri
 			ForceAttemptHTTP2:      false,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-
 			return nil
 		},
 		Jar: nil,
 	}
 
 	resp, err := client.Do(req)
-
 	if err != nil {
-
 		return nil, fmt.Errorf("error sending token request: %w", err)
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-
 		return nil, fmt.Errorf("error getting token, status code: %d", resp.StatusCode)
 	}
 
 	var tokenResp TokenResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-
 		return nil, fmt.Errorf("error decoding token response: %w", err)
 	}
 
@@ -268,9 +263,7 @@ func checkAccountType(ctx context.Context, accessToken string) (int, error) {
 	userURL := "https://api.twitter.com/2/users/me?user.fields=verified"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userURL, nil)
-
 	if err != nil {
-
 		return 0, fmt.Errorf("error creating user request: %w", err)
 	}
 
@@ -305,16 +298,13 @@ func checkAccountType(ctx context.Context, accessToken string) (int, error) {
 			ForceAttemptHTTP2:      false,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-
 			return nil
 		},
 		Jar: nil,
 	}
 
 	resp, err := client.Do(req)
-
 	if err != nil {
-
 		return 0, fmt.Errorf("error sending user request: %w", err)
 	}
 
@@ -330,7 +320,6 @@ func checkAccountType(ctx context.Context, accessToken string) (int, error) {
 	var userResp UserResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
-
 		return 0, fmt.Errorf("error decoding user response: %w", err)
 	}
 
@@ -355,16 +344,12 @@ func postTweet(ctx context.Context, text string, accessToken string) error {
 	tweetReq := TweetRequest{Text: text}
 
 	jsonData, err := json.Marshal(tweetReq)
-
 	if err != nil {
-
 		return fmt.Errorf("error marshaling tweet request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tweetURL, bytes.NewBuffer(jsonData))
-
 	if err != nil {
-
 		return fmt.Errorf("error creating request: %w", err)
 	}
 
@@ -399,16 +384,13 @@ func postTweet(ctx context.Context, text string, accessToken string) error {
 			ForceAttemptHTTP2:      false,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-
 			return nil
 		},
 		Jar: nil,
 	}
 
 	resp, err := client.Do(req)
-
 	if err != nil {
-
 		return fmt.Errorf("error sending request: %w", err)
 	}
 
@@ -417,7 +399,6 @@ func postTweet(ctx context.Context, text string, accessToken string) error {
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-
 		return fmt.Errorf("error posting tweet, status code: %d, response: %s",
 			resp.StatusCode, string(body))
 	}
@@ -426,7 +407,6 @@ func postTweet(ctx context.Context, text string, accessToken string) error {
 }
 
 func newEditorConfig() *EditorConfig {
-
 	return &EditorConfig{
 		editors:   []string{"nvim", "vim", "nano", "emacs", "notepad"},
 		envEditor: os.Getenv("EDITOR"),
@@ -434,17 +414,14 @@ func newEditorConfig() *EditorConfig {
 }
 
 func (ec *EditorConfig) chooseEditor() (*Editor, error) {
-
 	if ec.envEditor != "" {
 		if path, err := exec.LookPath(ec.envEditor); err == nil {
-
 			return &Editor{path: path, name: ec.envEditor}, nil
 		}
 	}
 
 	for _, editor := range ec.editors {
 		if path, err := exec.LookPath(editor); err == nil {
-
 			return &Editor{path: path, name: editor}, nil
 		}
 	}
@@ -494,14 +471,12 @@ func wrapText(text string, lineWidth int) string {
 
 	for _, paragraph := range paragraphs {
 		if paragraph == "" {
-
 			continue
 		}
 
 		words := strings.Fields(paragraph)
 
 		if len(words) == 0 {
-
 			continue
 		}
 
@@ -559,9 +534,7 @@ func showPreviewPrompt(content string) (bool, error) {
 	}
 
 	idx, _, err := prompt.Run()
-
 	if err != nil {
-
 		return false, fmt.Errorf("preview selection failed: %w", err)
 	}
 
@@ -571,9 +544,7 @@ func showPreviewPrompt(content string) (bool, error) {
 func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 	config := newEditorConfig()
 	editor, err := config.chooseEditor()
-
 	if err != nil {
-
 		return fmt.Errorf("editor initialization failed: %w", err)
 	}
 
@@ -612,9 +583,7 @@ func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 		}
 
 		idx, _, err := prompt.Run()
-
 		if err != nil {
-
 			return fmt.Errorf("prompt failed: %w", err)
 		}
 
@@ -625,7 +594,6 @@ func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 		}
 
 		content, err := editor.openEditor(ctx)
-
 		if err != nil {
 			log.Printf("error: %v", err)
 
@@ -639,12 +607,10 @@ func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 		}
 
 		if len(content) > maxPostLength {
-
 			return fmt.Errorf("tweet exceeds maximum length of %d characters", maxPostLength)
 		}
 
 		shouldSend, err := showPreviewPrompt(content)
-
 		if err != nil {
 			log.Printf("preview failed: %v", err)
 
@@ -672,11 +638,10 @@ func main() {
 	fmt.Println(info("[INFO] "), "getting environment variables.")
 
 	clientID, clientSecret, err := loadConfig()
-
 	if err != nil {
 		log.Printf("failed to load configuration: %v", err)
 		cancel()
-		os.Exit(1)
+		log.Fatal("Exiting the program due to configuration failure")
 	}
 
 	fmt.Println(success("[OK] "), "environment variables set.")
@@ -695,7 +660,6 @@ func main() {
 	fmt.Println(success("[OK] "), "creating unique authentication URL.")
 
 	u, err := url.Parse(authEndpoint)
-
 	if err != nil {
 		log.Fatalf("failed to parse auth endpoint: %v", err)
 	}
@@ -720,7 +684,6 @@ func main() {
 	select {
 	case code := <-authTokenChan:
 		tokenResponse, err := exchangeCodeForToken(ctx, clientID, clientSecret, code)
-
 		if err != nil {
 			log.Fatalf("error exchanging code for token: %v", err)
 		}
@@ -728,7 +691,6 @@ func main() {
 		fmt.Println(success("[OK] "), "authentication successful, starting x-yapper...")
 
 		maxPostLength, err = checkAccountType(ctx, tokenResponse.AccessToken)
-
 		if err != nil {
 			maxPostLength = 280
 
