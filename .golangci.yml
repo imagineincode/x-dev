@@ -6,6 +6,9 @@ linters:
     - prealloc
     - err113 # require static error definitions
     - forbidigo # forbid fmt.print*
+    - G404 # insecure random number source (rand)
+    - gochecknoglobals # no global variables
+    - mnd # magic numbers
 
 output:
   format: colored-line-number
@@ -14,3 +17,12 @@ output:
 
 run:
   timeout: 5m
+
+linters-settings:
+  depguard:
+    packages:
+      - github.com/fatih/color
+      - github.com/manifoldco/promptui
+    list-type: blacklist
+    exclude-rules:
+      - allow: cmd/x-yapper/main.go
