@@ -6,7 +6,6 @@ linters:
     - prealloc
     - err113 # require static error definitions
     - forbidigo # forbid fmt.print*
-    - G404 # insecure random number source (rand)
     - gochecknoglobals # no global variables
     - mnd # magic numbers
     - varnamelen # var name length
@@ -27,3 +26,8 @@ linters-settings:
     list-type: blacklist
     exclude-rules:
       - allow: cmd/x-yapper/main.go
+
+  gosec:
+    severity: medium
+    disable:
+      - G404 # insecure random number source (rand)
