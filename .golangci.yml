@@ -4,6 +4,8 @@ linters:
   disable:
     - maligned
     - prealloc
+    - err113 # require static error definitions
+    - forbidigo # forbid fmt.print*
 
 output:
   format: colored-line-number
