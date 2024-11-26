@@ -10,6 +10,9 @@ linters:
     - varnamelen # var name length
     - funlen # function length
     - depguard
+    - cyclop
+    - exhaustruct
+    - wsl
 
 output:
   formats: 
