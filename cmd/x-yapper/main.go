@@ -548,10 +548,10 @@ func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 		return fmt.Errorf("editor initialization failed: %w", err)
 	}
 
-	fmt.Println(`      
-    \ \  //  
-     \ \//  
-      \ \ 
+	fmt.Println(`
+    \ \  //
+     \ \//
+      \ \
      //\ \
     //  \ \
      yapper`)
