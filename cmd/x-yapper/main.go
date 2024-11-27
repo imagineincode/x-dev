@@ -29,11 +29,11 @@ type TweetRequest struct {
 }
 
 type TokenResponse struct {
-	AccessToken  string `json:"accessToken"`
-	TokenType    string `json:"tokenType"`
-	ExpiresIn    int    `json:"expiresIn"`
+	AccessToken  string `json:"access_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
 	Scope        string `json:"scope"`
-	RefreshToken string `json:"refreshToken"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 type UserResponse struct {
@@ -90,18 +90,15 @@ func loadConfig() (string, string, error) {
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	// Create a slice to store the random bytes
 	b := make([]byte, length)
 
-	// Generate cryptographically secure random bytes
 	for i := range b {
-		// Generate a secure random index in the charset
 		randomByte := make([]byte, 1)
+
 		if _, err := rand.Read(randomByte); err != nil {
 			log.Fatalf("failed to generate random byte: %v", err)
 		}
 
-		// Map the byte to a valid index in the charset
 		b[i] = charset[int(randomByte[0])%len(charset)]
 	}
 
@@ -438,7 +435,7 @@ func (e *Editor) openEditor(ctx context.Context) (string, error) {
 
 	tmpfileName := tmpfile.Name()
 	defer os.Remove(tmpfileName)
-	defer tmpfile.Close() // Defer closing the file until after it's used
+	defer tmpfile.Close()
 
 	editorPath, err := exec.LookPath(e.path)
 	if err != nil {
@@ -450,12 +447,10 @@ func (e *Editor) openEditor(ctx context.Context) (string, error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Run the editor with the context's cancellation support
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to run editor %s: %w", e.name, err)
 	}
 
-	// Read the content of the temp file after editor has finished
 	content, err := os.ReadFile(tmpfileName)
 	if err != nil {
 		return "", fmt.Errorf("failed to read temp file: %w", err)

@@ -16,6 +16,7 @@ linters:
     - gocritic
     - revive
     - whitespace
+    - tagliatelle
 
 output:
   format: colored-line-number
