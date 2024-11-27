@@ -1,0 +1,40 @@
+linters:
+  disable-all: false
+  enable-all: true
+  disable:
+    - prealloc
+    - err113 # require static error definitions
+    - forbidigo # forbid fmt.print*
+    - gochecknoglobals # no global variables
+    - mnd # magic numbers
+    - varnamelen # var name length
+    - funlen # function length
+    - depguard
+    - cyclop
+    - exhaustruct
+    - wsl
+    - gocritic
+    - revive
+
+output:
+  formats: 
+    - colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+run:
+  timeout: 5m
+
+linters-settings:
+  depguard:
+    packages:
+      - github.com/fatih/color
+      - github.com/manifoldco/promptui
+    list-type: blacklist
+    exclude-rules:
+      - allow: cmd/x-yapper/main.go
+
+  gosec:
+    severity: medium
+    disable:
+      - G404 # insecure random number source (rand)
