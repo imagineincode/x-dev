@@ -13,6 +13,8 @@ linters:
     - cyclop
     - exhaustruct
     - wsl
+    - gocritic
+    - revive
 
 output:
   formats: 
