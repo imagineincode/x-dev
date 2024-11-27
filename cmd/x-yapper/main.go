@@ -638,10 +638,13 @@ func main() {
 	fmt.Println(info("[INFO] "), "getting environment variables.")
 
 	clientID, clientSecret, err := loadConfig()
+
 	if err != nil {
-		log.Printf("failed to load configuration: %v", err)
+		fmt.Printf("failed to load configuration: %v", err)
+		fmt.Println(info("[INFO] "), "configure environment variables.")
+
 		cancel()
-		log.Println(failed("[ERROR] "), "exit app and configure environment variables.")
+		os.Exit(1)
 	}
 
 	fmt.Println(success("[OK] "), "environment variables set.")
