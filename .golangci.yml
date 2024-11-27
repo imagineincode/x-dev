@@ -3,22 +3,22 @@ linters:
   enable-all: true
   disable:
     - prealloc
-    - err113 # require static error definitions
-    - forbidigo # forbid fmt.print*
-    - gochecknoglobals # no global variables
-    - mnd # magic numbers
-    - varnamelen # var name length
-    - funlen # function length
+    - err113
+    - forbidigo
+    - gochecknoglobals
+    - mnd
+    - varnamelen
+    - funlen
     - depguard
     - cyclop
     - exhaustruct
     - wsl
     - gocritic
     - revive
+    - whitespace
 
 output:
-  formats: 
-    - colored-line-number
+  format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
 
@@ -27,14 +27,13 @@ run:
 
 linters-settings:
   depguard:
-    packages:
+    include-go-root: false
+    skip-generated: true
+    ignored-packages:
       - github.com/fatih/color
       - github.com/manifoldco/promptui
-    list-type: blacklist
-    exclude-rules:
-      - allow: cmd/x-yapper/main.go
 
   gosec:
     severity: medium
-    disable:
+    exclude:
       - G404 # insecure random number source (rand)
