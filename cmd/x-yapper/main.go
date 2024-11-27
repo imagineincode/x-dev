@@ -638,7 +638,6 @@ func main() {
 	fmt.Println(info("[INFO] "), "getting environment variables.")
 
 	clientID, clientSecret, err := loadConfig()
-
 	if err != nil {
 		fmt.Printf("failed to load configuration: %v", err)
 		fmt.Println(info("[INFO] "), "configure environment variables.")
