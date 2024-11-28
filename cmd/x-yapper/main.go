@@ -29,11 +29,11 @@ type TweetRequest struct {
 }
 
 type TokenResponse struct {
-	AccessToken  string `json:"accessToken"`
-	TokenType    string `json:"tokenType"`
-	ExpiresIn    int    `json:"expiresIn"`
+	AccessToken  string `json:"access_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
 	Scope        string `json:"scope"`
-	RefreshToken string `json:"refreshToken"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 type UserResponse struct {
@@ -90,18 +90,15 @@ func loadConfig() (string, string, error) {
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	// Create a slice to store the random bytes
 	b := make([]byte, length)
 
-	// Generate cryptographically secure random bytes
 	for i := range b {
-		// Generate a secure random index in the charset
 		randomByte := make([]byte, 1)
+
 		if _, err := rand.Read(randomByte); err != nil {
 			log.Fatalf("failed to generate random byte: %v", err)
 		}
 
-		// Map the byte to a valid index in the charset
 		b[i] = charset[int(randomByte[0])%len(charset)]
 	}
 
@@ -336,76 +333,6 @@ func checkAccountType(ctx context.Context, accessToken string) (int, error) {
 	return maxPostLength, nil
 }
 
-func postTweet(ctx context.Context, text string, accessToken string) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	tweetURL := "https://api.twitter.com/2/tweets"
-	tweetReq := TweetRequest{Text: text}
-
-	jsonData, err := json.Marshal(tweetReq)
-	if err != nil {
-		return fmt.Errorf("error marshaling tweet request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tweetURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("error creating request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			MaxIdleConns:           100,
-			MaxIdleConnsPerHost:    10,
-			IdleConnTimeout:        90 * time.Second,
-			Proxy:                  nil,
-			OnProxyConnectResponse: nil,
-			DialContext:            nil,
-			Dial:                   nil,
-			DialTLSContext:         nil,
-			DialTLS:                nil,
-			TLSClientConfig:        nil,
-			TLSHandshakeTimeout:    0,
-			DisableKeepAlives:      false,
-			DisableCompression:     false,
-			MaxConnsPerHost:        0,
-			ResponseHeaderTimeout:  0,
-			ExpectContinueTimeout:  0,
-			TLSNextProto:           nil,
-			ProxyConnectHeader:     nil,
-			GetProxyConnectHeader:  nil,
-			MaxResponseHeaderBytes: 0,
-			WriteBufferSize:        0,
-			ReadBufferSize:         0,
-			ForceAttemptHTTP2:      false,
-		},
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return nil
-		},
-		Jar: nil,
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("error sending request: %w", err)
-	}
-
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error posting tweet, status code: %d, response: %s",
-			resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
 func newEditorConfig() *EditorConfig {
 	return &EditorConfig{
 		editors:   []string{"nvim", "vim", "nano", "emacs", "notepad"},
@@ -438,7 +365,7 @@ func (e *Editor) openEditor(ctx context.Context) (string, error) {
 
 	tmpfileName := tmpfile.Name()
 	defer os.Remove(tmpfileName)
-	defer tmpfile.Close() // Defer closing the file until after it's used
+	defer tmpfile.Close()
 
 	editorPath, err := exec.LookPath(e.path)
 	if err != nil {
@@ -450,12 +377,10 @@ func (e *Editor) openEditor(ctx context.Context) (string, error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Run the editor with the context's cancellation support
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to run editor %s: %w", e.name, err)
 	}
 
-	// Read the content of the temp file after editor has finished
 	content, err := os.ReadFile(tmpfileName)
 	if err != nil {
 		return "", fmt.Errorf("failed to read temp file: %w", err)
@@ -541,6 +466,76 @@ func showPreviewPrompt(content string) (bool, error) {
 	return idx == 0, nil // index 0 is "Send Post"
 }
 
+func postTweet(ctx context.Context, text string, accessToken string) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	tweetURL := "https://api.twitter.com/2/tweets"
+	tweetReq := TweetRequest{Text: text}
+
+	jsonData, err := json.Marshal(tweetReq)
+	if err != nil {
+		return fmt.Errorf("error marshaling tweet request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tweetURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:           100,
+			MaxIdleConnsPerHost:    10,
+			IdleConnTimeout:        90 * time.Second,
+			Proxy:                  nil,
+			OnProxyConnectResponse: nil,
+			DialContext:            nil,
+			Dial:                   nil,
+			DialTLSContext:         nil,
+			DialTLS:                nil,
+			TLSClientConfig:        nil,
+			TLSHandshakeTimeout:    0,
+			DisableKeepAlives:      false,
+			DisableCompression:     false,
+			MaxConnsPerHost:        0,
+			ResponseHeaderTimeout:  0,
+			ExpectContinueTimeout:  0,
+			TLSNextProto:           nil,
+			ProxyConnectHeader:     nil,
+			GetProxyConnectHeader:  nil,
+			MaxResponseHeaderBytes: 0,
+			WriteBufferSize:        0,
+			ReadBufferSize:         0,
+			ForceAttemptHTTP2:      false,
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return nil
+		},
+		Jar: nil,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error sending request: %w", err)
+	}
+
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error posting tweet, status code: %d, response: %s",
+			resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 	config := newEditorConfig()
 	editor, err := config.chooseEditor()
@@ -603,11 +598,13 @@ func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 		if strings.TrimSpace(content) == "" {
 			fmt.Println(warn("[WARN] "), "No content entered. Returning to main prompt.")
 
-			return nil
+			continue
 		}
 
 		if len(content) > maxPostLength {
-			return fmt.Errorf("tweet exceeds maximum length of %d characters", maxPostLength)
+			fmt.Println(failed("[ERROR] "), "tweet exceeds maximum length of", maxPostLength, "characters.")
+
+			continue
 		}
 
 		shouldSend, err := showPreviewPrompt(content)
@@ -622,7 +619,7 @@ func runPrompts(ctx context.Context, tokenResp *TokenResponse) error {
 			if err != nil {
 				fmt.Printf(failed("[ERROR] "), "error posting tweet: %v\n", err)
 			} else {
-				fmt.Println("\U00002705 Successfully sent post!")
+				fmt.Println("\U00002705 Post Successful!")
 			}
 
 		} else {
@@ -678,7 +675,7 @@ func main() {
 	u.RawQuery = q.Encode()
 	authURL := u.String()
 
-	fmt.Printf("\nPlease open this URL in your browser to authorize the application:\n%s\n\n", authURL)
+	fmt.Printf("\nPlease open this URL in your browser to authorize the application:\n\n%s\n\n", authURL)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -690,13 +687,13 @@ func main() {
 			log.Fatalf("error exchanging code for token: %v", err)
 		}
 
-		fmt.Println(success("[OK] "), "authentication successful, starting x-yapper...")
+		fmt.Println(success("[OK] "), "authentication successful, starting x-yapper prompt.")
 
 		maxPostLength, err = checkAccountType(ctx, tokenResponse.AccessToken)
 		if err != nil {
 			maxPostLength = 280
 
-			log.Printf("could not determine tweet length limit: %v", err)
+			fmt.Printf("could not determine tweet length limit: %v", err)
 			fmt.Println(info("[INFO] "), "standard post length requirements set.")
 		}
 
