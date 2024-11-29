@@ -120,10 +120,12 @@ jobs:
       env:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
-        # Sign the binary using GPG with pinentry-mode loopback
-        gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
-            --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc \
-            x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$env:GPG_PASSPHRASE" --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
+        else
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
+        fi
+      shell: bash
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
