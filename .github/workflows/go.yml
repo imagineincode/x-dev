@@ -101,13 +101,22 @@ jobs:
         GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
+        # Remove any old GPG configuration to avoid conflicts
+        rm -rf ~/.gnupg
+        mkdir -p ~/.gnupg
+
+        # Import the GPG private key
         echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-        echo -e "passphrase=$GPG_PASSPHRASE\n" > ~/.gnupg/gpg.conf
+
+        # Set up GPG config to disable TTY (non-interactive mode)
+        echo -e "no-tty" > ~/.gnupg/gpg.conf
         chmod 600 ~/.gnupg/gpg.conf
 
     - name: Sign Binary
       run: |
+        # Sign the binary using GPG with the passphrase
         gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
+
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
