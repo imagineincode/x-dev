@@ -1,5 +1,5 @@
 ![GitHub Release](https://img.shields.io/github/v/release/imagineincode/x-dev) ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/imagineincode/x-dev/go.yml)
- ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/imagineincode/x-dev)
+ ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/imagineincode/x-dev) ![Static Badge](https://img.shields.io/badge/X_API-v2-green)
 
 # X-yapper
 
@@ -20,6 +20,7 @@ X-Yapper is a CLI tool that allows you to send tweets to your x.com (Twitter) pr
     1. [X Developer App](#x-developer-app)
     1. [Local env variables](#local-environment-variables)
     1. [Building from source](#building-from-source)
+    1. [Verify binary using GPG](#verify-binary-using-gpg)
 1. [Using X-yapper](#using-x-yapper)
 1. [Contact](#contact)
 
@@ -70,36 +71,45 @@ X-Yapper assumes you have the Client ID and Client Secret set as local environme
 
 #### Temporary (current session only)
 
-**Linux and macOS (Bash/Zsh)**
+##### Linux and macOS (Bash/Zsh)
 
 ```bash
 export TWITTER_CLIENT_ID="<client_id>"
 export TWITTER_CLIENT_SECRET="<client_secret>"
 ```
+
 - **To verify:**
+
 ```bash
 echo $TWITTER_CLIENT_ID
 echo $TWITTER_CLIENT_SECRET
 ```
 
-**Windows**
+##### Windows
 
-**CMD**
+##### CMD
+
 ```cmd
 set TWITTER_CLIENT_ID=<client_id>
 set TWITTER_CLIENT_SECRET=<client_secret>
 ```
+
 - **To verify:**
-```
+
+```cmd
 echo %TWITTER_CLIENT_ID%
 echo %TWITTER_CLIENT_SECRET%
 ```
-**PowerShell**
+
+##### PowerShell
+
 ```powershell
 $env:TWITTER_CLIENT_ID="<client_id>"
 $env:TWITTER_CLIENT_SECRET="<client_secret>"
 ```
+
 - **To verify:**
+
 ```powershell
 $env:TWITTER_CLIENT_ID
 $env:TWITTER_CLIENT_SECRET
@@ -116,21 +126,28 @@ $env:TWITTER_CLIENT_SECRET
 
 #### Steps
 
-**Linux and macOS**
+##### Linux and macOS
 
 1. Open a terminal window and clone the repo:
+
 ```bash
 git clone https://github.com/imagineincode/x-dev.git
 ```
+
 2. Navigate to the repo directory:
+
 ```bash
 cd x-dev
 ```
+
 3. Build the application:
+
 ```bash
 go build -o x-yapper ./cmd/x-yapper
 ```
+
 4. Run x-yapper:
+
 ```bash
 ./x-yapper
 ```
@@ -138,20 +155,77 @@ go build -o x-yapper ./cmd/x-yapper
 **Windows**
 
 1. Open a terminal window and clone the repo:
+
 ```cmd
 git clone https://github.com/imagineincode/x-dev.git
 ```
+
 2. Navigate to the repo directory:
+
 ```cmd
 cd x-dev
 ```
+
 3. Build the application:
+
 ```cmd
 go build -o x-yapper.exe ./cmd/x-yapper
 ```
+
 4. Run x-yapper:
+
 ```cmd
 .\x-yapper.exe
+```
+
+### Download Release
+
+1. Navigate to the [Releases](https://github.com/imagineincode/x-dev/releases) section to download from GitHub.
+2. Click on the release title to open its details page.
+3. Under the **Assets** section, you’ll find:
+   - The binary for your operating system or platform.
+   - The signature file (`.asc`) for the binary.
+   - The public key file (`x-yapper-cross-platform-public-key.asc`).
+4. Download the binary, the corresponding `.asc` signature file, and the `x-yapper-cross-platform-public-key.asc` file.
+5. Verify the binary using GPG:
+
+```bash
+gpg --import x-yapper-cross-platform-public-key.asc
+gpg --verify <BINARY_FILE>.asc <BINARY_FILE>
+```
+
+### Download from CLI
+
+1. curl - replace `<VERSION>` AND `<OS_PLATFORM>`.
+
+```bash
+curl -L -o x-yapper https://github.com/imagineincode/x-dev/releases/download/<VERSION>/<OS_PLATFORM>
+
+chmod +x x-yapper
+```
+
+2. wget - replace `<VERSION>` AND `<OS_PLATFORM>`.
+
+```bash
+wget https://github.com/imagineincode/x-dev/releases/download/<VERSION>/<OS_PLATFORM>
+
+chmod +x x-yapper
+```
+
+## Verify binary using GPG
+
+Verifying the binary ensures that the file you downloaded has not been tampered with and is an authentic release signed by the developer. This process uses GPG (GNU Privacy Guard) to check the signature of the binary against the provided public key, confirming its integrity and origin.
+
+1. Under the **Assets** section, you’ll find:
+   - The signature file (`.asc`) for the binary.
+   - The public key file (`x-yapper-cross-platform-public-key.asc`).
+1. Download the corresponding `.asc` signature file and the `x-yapper-cross-platform-public-key.asc` file.
+1. Verify the binary using GPG:
+
+```bash
+gpg --import x-yapper-cross-platform-public-key.asc
+
+gpg --verify <BINARY_FILE>.asc <BINARY_FILE>
 ```
 
 ## Using X-Yapper
@@ -163,9 +237,11 @@ go build -o x-yapper.exe ./cmd/x-yapper
 
 3. Click **Authorize App**.
 4. You should see the following message in the browser and can close the window:
-    ```bash
-    Authorization successful! You can close this window.
-    ```
+
+```bash
+Authorization successful! You can close this window.
+```
+
 5. Select **Start New Post**.
 6. Your local text edit is opened within the terminal, allowing you to type your content. Save the file when done.
 7. You'll be shown a preview of the post, with options to **Send Post** or **Discard**.
