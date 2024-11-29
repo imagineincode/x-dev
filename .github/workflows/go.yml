@@ -107,25 +107,25 @@ jobs:
     - name: Import GPG Key
       env:
         GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      shell: bash
       run: |
         # Create gnupg directory with correct permissions
         mkdir -p ~/.gnupg
         chmod 700 ~/.gnupg
     
-        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-
+        # Use echo to import the key and handle potential Windows line endings
+        echo "$GPG_PRIVATE_KEY" | tr -d '\r' | gpg --batch --import
+  
+        # List secret keys to verify import
         gpg --batch --list-secret-keys
-    
+        
     - name: Sign Binary
       env:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-      run: |
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$env:GPG_PASSPHRASE" --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
-        else
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
-        fi
       shell: bash
+      run: |
+        # Use full path to GPG to ensure correct execution
+        gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
