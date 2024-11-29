@@ -107,25 +107,23 @@ jobs:
     - name: Import GPG Key
       env:
         GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
         # Create gnupg directory with correct permissions
         mkdir -p ~/.gnupg
         chmod 700 ~/.gnupg
     
         echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-    
-        echo "allow-loopback-pinentry" >> ~/.gnupg/gpg.conf
-        echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
 
-        gpg --list-secret-keys
+        gpg --batch --list-secret-keys
     
     - name: Sign Binary
       env:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
-        # Sign the binary using GPG with passphrase via pinentry-mode loopback
-        gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
+        # Sign the binary using GPG with pinentry-mode loopback
+        gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc \
+            x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
