@@ -101,22 +101,23 @@ jobs:
         GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
-        # Remove any old GPG configuration to avoid conflicts
-        rm -rf ~/.gnupg
+        # Create gnupg directory with correct permissions
         mkdir -p ~/.gnupg
-
-        # Import the GPG private key
+        chmod 700 ~/.gnupg
+    
         echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+    
+        echo "allow-loopback-pinentry" >> ~/.gnupg/gpg.conf
+        echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
 
-        # Set up GPG config to disable TTY (non-interactive mode)
-        echo -e "no-tty" > ~/.gnupg/gpg.conf
-        chmod 600 ~/.gnupg/gpg.conf
-
+        gpg --list-secret-keys
+    
     - name: Sign Binary
+      env:
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
-        # Sign the binary using GPG with the passphrase
-        gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
-
+        # Sign the binary using GPG with passphrase via pinentry-mode loopback
+        gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign --output x-yapper-${{ matrix.suffix }}${{ matrix.ext }}.asc x-yapper-${{ matrix.suffix }}${{ matrix.ext }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
