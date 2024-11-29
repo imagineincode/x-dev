@@ -1,11 +1,19 @@
 name: Go Cross-Platform Build and Release
 on:
+  workflow_dispatch:
+    inputs:
+      test_release:
+        description: 'Test Release Build'
+        required: false
+        default: 'true'
   push:
     branches: [ "main" ]
     tags:
       - 'v*'
   pull_request:
     branches: [ "main" ]
+  release:
+    types: [published]
 
 jobs:
   build:
