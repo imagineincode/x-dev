@@ -76,6 +76,9 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    environment:
+      name: actions-workflow
+
     steps:
     - uses: actions/checkout@v4
 
