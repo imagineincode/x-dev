@@ -11,11 +11,11 @@ import (
 	"os"
 	"sync"
 	"time"
+
 	"x-dev/internal/models"
 )
 
 var (
-	maxPostLength  int
 	callbackServer *http.Server
 )
 
@@ -101,6 +101,7 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userURL, nil)
 	if err != nil {
+
 		return 0, models.UserResponse{}, fmt.Errorf("error creating user request: %w", err)
 	}
 
@@ -115,6 +116,7 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 			IdleConnTimeout:     90 * time.Second,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+
 			return nil
 		},
 		Jar: nil,
@@ -122,6 +124,7 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 
 	resp, err := client.Do(req)
 	if err != nil {
+
 		return 0, models.UserResponse{}, fmt.Errorf("error sending user request: %w", err)
 	}
 
@@ -137,13 +140,15 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 	var userResp models.UserResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
+
 		return 0, models.UserResponse{}, fmt.Errorf("error decoding user response: %w", err)
 	}
 
 	formattedJSON, err := json.MarshalIndent(userResp, "", "  ")
 	if err != nil {
 		fmt.Printf("Error formatting JSON: %v\n", err)
-		return 0, userResp, err
+
+		return 0, userResp, fmt.Errorf("error formatting JSON: %w", err)
 	}
 
 	fmt.Printf("Full Response:\n%s\n", string(formattedJSON))
@@ -167,11 +172,13 @@ func PostTweet(ctx context.Context, text string, accessToken string) error {
 
 	jsonData, err := json.Marshal(tweetReq)
 	if err != nil {
+
 		return fmt.Errorf("error marshaling tweet request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tweetURL, bytes.NewBuffer(jsonData))
 	if err != nil {
+
 		return fmt.Errorf("error creating request: %w", err)
 	}
 
@@ -186,6 +193,7 @@ func PostTweet(ctx context.Context, text string, accessToken string) error {
 			IdleConnTimeout:     90 * time.Second,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+
 			return nil
 		},
 		Jar: nil,
@@ -193,6 +201,7 @@ func PostTweet(ctx context.Context, text string, accessToken string) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
+
 		return fmt.Errorf("error sending request: %w", err)
 	}
 
@@ -201,6 +210,7 @@ func PostTweet(ctx context.Context, text string, accessToken string) error {
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+
 		return fmt.Errorf("error posting tweet, status code: %d, response: %s",
 			resp.StatusCode, string(body))
 	}

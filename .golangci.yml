@@ -18,6 +18,9 @@ linters:
     - whitespace
     - tagliatelle
     - exportloopref
+    - lll
+    - gci
+    - gofumpt
 
 output:
   formats:

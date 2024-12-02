@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"strings"
+
 	"x-dev/internal/api"
 	"x-dev/internal/config"
 	"x-dev/internal/models"
@@ -112,10 +112,10 @@ func wrapText(text string, lineWidth int) string {
 	for _, paragraph := range paragraphs {
 		if strings.TrimSpace(paragraph) == "" {
 			wrappedParagraphs = append(wrappedParagraphs, "")
+
 			continue
 		}
 
-		// Split the paragraph into lines while preserving existing line breaks
 		originalLines := strings.Split(paragraph, "\n")
 		wrappedLines := []string{}
 
@@ -124,6 +124,7 @@ func wrapText(text string, lineWidth int) string {
 
 			if len(words) == 0 {
 				wrappedLines = append(wrappedLines, "")
+
 				continue
 			}
 
@@ -168,16 +169,6 @@ func showPreviewPrompt(content string) (bool, error) {
 			Help:     "",
 			FuncMap:  nil,
 		},
-		Size:              0,
-		Stdin:             os.Stdin,
-		Stdout:            os.Stdout,
-		CursorPos:         0,
-		IsVimMode:         false,
-		HideHelp:          false,
-		HideSelected:      false,
-		Keys:              nil,
-		Searcher:          nil,
-		StartInSearchMode: false,
 	}
 
 	idx, _, err := prompt.Run()
