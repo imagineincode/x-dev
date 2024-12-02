@@ -38,9 +38,12 @@ type TokenResponse struct {
 
 type UserResponse struct {
 	Data struct {
-		ID       string `json:"id"`
-		Name     string `json:"name"`
-		Verified bool   `json:"verified"`
+		ID                string `json:"id"`
+		Name              string `json:"name"`
+		Username          string `json:"username"`
+		MostRecentTweetID string `json:"most_recent_tweet_id"`
+		Verified          bool   `json:"verified"`
+		VerifiedType      string `json:"verified_type"`
 	} `json:"data"`
 }
 
@@ -257,7 +260,7 @@ func checkAccountType(ctx context.Context, accessToken string) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	userURL := "https://api.twitter.com/2/users/me?user.fields=verified"
+	userURL := "https://api.twitter.com/2/users/me?user.fields=id,name,most_recent_tweet_id,username,verified,verified_type"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userURL, nil)
 	if err != nil {
@@ -319,6 +322,16 @@ func checkAccountType(ctx context.Context, accessToken string) (int, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
 		return 0, fmt.Errorf("error decoding user response: %w", err)
 	}
+
+	// Convert userResp to a formatted JSON string
+	formattedJSON, err := json.MarshalIndent(userResp, "", "  ")
+	if err != nil {
+		fmt.Printf("Error formatting JSON: %v\n", err)
+		return 0, err
+	}
+
+	// Print the formatted JSON
+	fmt.Printf("Full Response:\n%s\n", string(formattedJSON))
 
 	if userResp.Data.Verified {
 		maxPostLength = 4000
