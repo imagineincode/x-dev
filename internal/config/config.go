@@ -76,7 +76,7 @@ func (e Editor) OpenEditor(ctx context.Context) (string, error) {
 	return strings.TrimRight(string(content), "\n\r\t "), nil
 }
 
-func LoadConfig() (string, string, error) {
+func LoadClientConfig() (string, string, error) {
 	clientID := os.Getenv("TWITTER_CLIENT_ID")
 	clientSecret := os.Getenv("TWITTER_CLIENT_SECRET")
 

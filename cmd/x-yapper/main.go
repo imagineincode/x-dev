@@ -23,7 +23,7 @@ func main() {
 
 	fmt.Println(prompt.Info("[INFO] "), "getting environment variables")
 
-	clientID, clientSecret, err := config.LoadConfig()
+	clientID, clientSecret, err := config.LoadClientConfig()
 	if err != nil {
 		fmt.Println(prompt.Failed("[ERROR]"), "failed to load configuration:", err)
 

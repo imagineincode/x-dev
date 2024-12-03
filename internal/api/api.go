@@ -144,15 +144,6 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 		return 0, models.UserResponse{}, fmt.Errorf("error decoding user response: %w", err)
 	}
 
-	formattedJSON, err := json.MarshalIndent(userResp, "", "  ")
-	if err != nil {
-		fmt.Printf("Error formatting JSON: %v\n", err)
-
-		return 0, userResp, fmt.Errorf("error formatting JSON: %w", err)
-	}
-
-	fmt.Printf("Full Response:\n%s\n", string(formattedJSON))
-
 	var maxPostLength int
 	if userResp.Data.Verified {
 		maxPostLength = 4000

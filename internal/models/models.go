@@ -21,8 +21,13 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type MediaRequest struct {
+	MediaIDs []string `json:"media_ids,omitempty"`
+}
+
 type TweetRequest struct {
-	Text string `json:"text"`
+	Text  string        `json:"text"`
+	Media *MediaRequest `json:"media,omitempty"`
 }
 
 type UserResponse struct {

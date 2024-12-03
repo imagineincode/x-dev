@@ -86,18 +86,16 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 		shouldSend, err := showPreviewPrompt(content)
 		if err != nil {
 			log.Printf("preview failed: %v", err)
-
 			continue
 		}
 
 		if shouldSend {
-			err = api.PostTweet(ctx, content, tokenResp.AccessToken)
+			err := api.PostTweet(ctx, content, tokenResp.AccessToken)
 			if err != nil {
 				fmt.Printf(Failed("[ERROR] "), "error posting tweet: %v\n", err)
 			} else {
 				fmt.Println("\U00002705 Post Successful!")
 			}
-
 		} else {
 			fmt.Println("\U0000274C Post discarded.")
 		}
@@ -157,24 +155,44 @@ func showPreviewPrompt(content string) (bool, error) {
 	fmt.Println("--------------------------------------------------")
 	fmt.Println("")
 
-	prompt := promptui.Select{
-		Label: "Choose an action",
-		Items: []string{"Send Post", "Discard"},
-		Templates: &promptui.SelectTemplates{
-			Label:    "{{ . }}?",
-			Active:   "\U0001F449 {{ . | cyan }}",
-			Inactive: "  {{ . | white }}",
-			Selected: "\U0001F680 {{ . | green }}",
-			Details:  "",
-			Help:     "",
-			FuncMap:  nil,
-		},
-	}
+	for {
+		prompt := promptui.Select{
+			Label: "Choose an action",
+			Items: []string{"Send Post", "Discard"},
+			Templates: &promptui.SelectTemplates{
+				Label:    "{{ . }}?",
+				Active:   "\U0001F449 {{ . | cyan }}",
+				Inactive: "  {{ . | white }}",
+				Selected: "\U0001F680 {{ . | green }}",
+				Details:  "",
+				Help:     "",
+				FuncMap:  nil,
+			},
+		}
 
-	idx, _, err := prompt.Run()
-	if err != nil {
-		return false, fmt.Errorf("preview selection failed: %w", err)
-	}
+		_, selectedAction, err := prompt.Run()
+		if err != nil {
 
-	return idx == 0, nil // index 0 is "Send Post"
+			return false, fmt.Errorf("preview selection failed: %w", err)
+		}
+
+		switch selectedAction {
+		case "Send Post":
+
+			return true, nil
+		case "Discard":
+
+			return false, nil
+		}
+
+		confirmPrompt := promptui.Prompt{
+			Label:     "Press Enter to continue",
+			IsConfirm: true,
+		}
+		_, err = confirmPrompt.Run()
+		if err != nil {
+
+			return false, err
+		}
+	}
 }
