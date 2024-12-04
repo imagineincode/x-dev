@@ -15,9 +15,7 @@ import (
 	"x-dev/internal/models"
 )
 
-var (
-	callbackServer *http.Server
-)
+var callbackServer *http.Server
 
 const (
 	authEndpoint     = "https://twitter.com/i/oauth2/authorize"
@@ -101,7 +99,6 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userURL, nil)
 	if err != nil {
-
 		return 0, models.UserResponse{}, fmt.Errorf("error creating user request: %w", err)
 	}
 
@@ -116,7 +113,6 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 			IdleConnTimeout:     90 * time.Second,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-
 			return nil
 		},
 		Jar: nil,
@@ -124,7 +120,6 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 
 	resp, err := client.Do(req)
 	if err != nil {
-
 		return 0, models.UserResponse{}, fmt.Errorf("error sending user request: %w", err)
 	}
 
@@ -140,7 +135,6 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 	var userResp models.UserResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
-
 		return 0, models.UserResponse{}, fmt.Errorf("error decoding user response: %w", err)
 	}
 
@@ -154,7 +148,7 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 	return maxPostLength, userResp, nil
 }
 
-func PostTweet(ctx context.Context, text string, accessToken string) error {
+func PostTweet(ctx context.Context, text string, accessToken string) (*models.TweetResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -163,14 +157,12 @@ func PostTweet(ctx context.Context, text string, accessToken string) error {
 
 	jsonData, err := json.Marshal(tweetReq)
 	if err != nil {
-
-		return fmt.Errorf("error marshaling tweet request: %w", err)
+		return nil, fmt.Errorf("error marshaling tweet request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tweetURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-
-		return fmt.Errorf("error creating request: %w", err)
+		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -184,7 +176,6 @@ func PostTweet(ctx context.Context, text string, accessToken string) error {
 			IdleConnTimeout:     90 * time.Second,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-
 			return nil
 		},
 		Jar: nil,
@@ -192,19 +183,70 @@ func PostTweet(ctx context.Context, text string, accessToken string) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
-
-		return fmt.Errorf("error sending request: %w", err)
+		return nil, fmt.Errorf("error sending request: %w", err)
 	}
-
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-
-		return fmt.Errorf("error posting tweet, status code: %d, response: %s",
+		return nil, fmt.Errorf("error posting tweet, status code: %d, response: %s",
 			resp.StatusCode, string(body))
 	}
 
-	return nil
+	var tweetResp models.TweetResponse
+	if err := json.Unmarshal(body, &tweetResp); err != nil {
+		return nil, fmt.Errorf("error unmarshaling tweet response: %w", err)
+	}
+
+	return &tweetResp, nil
+}
+
+func PostThreadTweet(ctx context.Context, tweetReq models.TweetRequest, accessToken string) (*models.TweetResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	tweetURL := "https://api.twitter.com/2/tweets"
+
+	jsonData, err := json.Marshal(tweetReq)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling tweet request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tweetURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error posting tweet, status code: %d, response: %s",
+			resp.StatusCode, string(body))
+	}
+
+	var tweetResp models.TweetResponse
+	if err := json.Unmarshal(body, &tweetResp); err != nil {
+		return nil, fmt.Errorf("error unmarshaling tweet response: %w", err)
+	}
+
+	return &tweetResp, nil
 }

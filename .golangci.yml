@@ -21,6 +21,8 @@ linters:
     - lll
     - gci
     - gofumpt
+    - nlreturn
+    - gocognit
 
 output:
   formats:

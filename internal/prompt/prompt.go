@@ -2,8 +2,8 @@ package prompt
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	"x-dev/internal/api"
@@ -27,6 +27,200 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 		return fmt.Errorf("editor initialization failed: %w", err)
 	}
 
+	printHeader(userResponse)
+
+	for {
+		action, err := promptMainAction()
+		if err != nil {
+			return fmt.Errorf("main action prompt failed: %w", err)
+		}
+
+		if action == "Exit" {
+			fmt.Println(Success("[OK] "), "exiting x-yapper...")
+			return nil
+		}
+
+		initialPost, err := createPost(ctx, editor, maxPostLength)
+		if err != nil {
+			if errors.Is(err, errEmptyContent) {
+				continue
+			}
+			return fmt.Errorf("initial post creation failed: %w", err)
+		}
+
+		firstTweetResp, err := api.PostTweet(ctx, initialPost, tokenResp.AccessToken)
+		if err != nil {
+			fmt.Println(Failed("[ERROR] "), fmt.Sprintf("error posting tweet: %v", err))
+			continue
+		}
+
+		previousTweetID := firstTweetResp.Data.ID
+		fmt.Printf("\U00002705 Post Successful! Tweet ID: %v\n", previousTweetID)
+
+		if err := handleThreadCreation(ctx, editor, tokenResp, maxPostLength, previousTweetID); err != nil {
+			return err
+		}
+	}
+}
+
+var errEmptyContent = errors.New("no content entered")
+
+func validatePostContent(content string, maxLength int) error {
+	trimmedContent := strings.TrimSpace(content)
+	if trimmedContent == "" {
+		return errEmptyContent
+	}
+
+	if len(content) > maxLength {
+		return fmt.Errorf("post exceeds maximum length of %d characters", maxLength)
+	}
+
+	return nil
+}
+
+func createPost(ctx context.Context, editor interface {
+	OpenEditor(ctx context.Context) (string, error)
+}, maxPostLength int,
+) (string, error) {
+	content, err := editor.OpenEditor(ctx)
+	if err != nil {
+		return "", fmt.Errorf("error opening editor: %w", err)
+	}
+
+	if err := validatePostContent(content, maxPostLength); err != nil {
+		if errors.Is(err, errEmptyContent) {
+			fmt.Println(Warn("[WARN] "), "No content entered. Returning to main prompt.")
+		} else {
+			fmt.Println(Failed("[ERROR] "), err)
+		}
+		return "", err
+	}
+
+	wrappedContent := wrapText(content, 60)
+	shouldSend, err := showPreviewPrompt(wrappedContent)
+	if err != nil {
+		return "", fmt.Errorf("preview prompt error: %w", err)
+	}
+	if !shouldSend {
+		return "", errEmptyContent
+	}
+	return content, nil
+}
+
+func handleThreadCreation(ctx context.Context, editor interface {
+	OpenEditor(ctx context.Context) (string, error)
+},
+	tokenResp *models.TokenResponse, maxPostLength int, initialTweetID string,
+) error {
+	var threadTweets []string
+	previousTweetID := initialTweetID
+
+	for {
+		threadAction, err := promptThreadAction()
+		if err != nil {
+			return fmt.Errorf("thread action prompt failed: %w", err)
+		}
+
+		switch threadAction {
+		case "Add Post to Thread":
+			threadContent, err := createPost(ctx, editor, maxPostLength)
+			if err != nil {
+				if errors.Is(err, errEmptyContent) {
+					continue
+				}
+				return err
+			}
+
+			threadTweets = append(threadTweets, threadContent)
+
+		case "Preview Thread":
+			if len(threadTweets) == 0 {
+				fmt.Println(Warn("[WARN] "), "No thread posts to preview.")
+				continue
+			}
+
+			var formattedTweets []string
+			for _, tweet := range threadTweets {
+				formattedTweets = append(formattedTweets, wrapText(tweet, 60))
+			}
+
+			shouldSendThread, err := showPreviewPrompt(formattedTweets)
+			if err != nil {
+				return fmt.Errorf("thread preview error: %w", err)
+			}
+			if !shouldSendThread {
+				continue
+			}
+
+			var threadTweetIDs []string
+			for _, threadContent := range threadTweets {
+				threadTweetReq := models.TweetRequest{
+					Text: threadContent,
+					Reply: &models.ReplyDetails{
+						InReplyToTweetID: previousTweetID,
+					},
+				}
+
+				threadResp, err := api.PostThreadTweet(ctx, threadTweetReq, tokenResp.AccessToken)
+				if err != nil {
+					fmt.Printf(Failed("[ERROR] "), "error posting thread tweet: %v\n", err)
+					continue
+				}
+
+				threadTweetIDs = append(threadTweetIDs, threadResp.Data.ID)
+				previousTweetID = threadResp.Data.ID
+			}
+
+			fmt.Printf("\U00002705 Thread Posts Successful! Tweet IDs: %v\n", threadTweetIDs)
+			return nil
+
+		case "Discard":
+			return nil
+		}
+	}
+}
+
+func promptMainAction() (string, error) {
+	prompt := promptui.Select{
+		Label: "Choose an action",
+		Items: []string{"Start New Post", "Exit"},
+		Templates: &promptui.SelectTemplates{
+			Label:    "{{ . }}?",
+			Active:   "-> {{ . | cyan }}",
+			Inactive: "  {{ . | white }}",
+			Selected: "\U0001F44D {{ . | green }}",
+		},
+	}
+
+	_, result, err := prompt.Run()
+	if err != nil {
+		return "", fmt.Errorf("failed to execute prompt: %w", err)
+	}
+
+	return result, nil
+}
+
+func promptThreadAction() (string, error) {
+	prompt := promptui.Select{
+		Label: "Thread Options",
+		Items: []string{"Add Post to Thread", "Preview Thread", "Discard"},
+		Templates: &promptui.SelectTemplates{
+			Label:    "{{ . }}?",
+			Active:   "-> {{ . | cyan }}",
+			Inactive: "  {{ . | white }}",
+			Selected: "\U0001F44D {{ . | green }}",
+		},
+	}
+
+	_, result, err := prompt.Run()
+	if err != nil {
+		return "", fmt.Errorf("failed to execute prompt: %w", err)
+	}
+
+	return result, nil
+}
+
+func printHeader(userResponse models.UserResponse) {
 	fmt.Println(`
     \ \  //
      \ \//
@@ -37,162 +231,62 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 	fmt.Println()
 	fmt.Println(Success("[OK] ") + fmt.Sprintf("authenticated as %v (@%v)", userResponse.Data.Name, userResponse.Data.Username))
 	fmt.Println()
-	fmt.Println()
-	for {
-		prompt := promptui.Select{
-			Label: "Choose an action",
-			Items: []string{"Start New Post", "Exit"},
-			Templates: &promptui.SelectTemplates{
-				Label:    "{{ . }}?",
-				Active:   "-> {{ . | cyan }}",
-				Inactive: "  {{ . | white }}",
-				Selected: "\U0001F44D {{ . | green }}",
-				Details:  "",
-				Help:     "",
-				FuncMap:  nil,
-			},
-		}
+}
 
-		idx, _, err := prompt.Run()
-		if err != nil {
-			return fmt.Errorf("prompt failed: %w", err)
-		}
+func wrapText(text string, width int) string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
 
-		if idx == 1 { // Exit option
-			fmt.Println(Success("[OK] "), "exiting editor...")
+	lines := []string{}
+	currentLine := words[0]
 
-			return nil
-		}
-
-		content, err := editor.OpenEditor(ctx)
-		if err != nil {
-			log.Printf("error: %v", err)
-
-			return nil
-		}
-
-		if strings.TrimSpace(content) == "" {
-			fmt.Println(Warn("[WARN] "), "No content entered. Returning to main prompt.")
-
-			continue
-		}
-
-		if len(content) > maxPostLength {
-			fmt.Println(Failed("[ERROR] "), "tweet exceeds maximum length of", maxPostLength, "characters.")
-
-			continue
-		}
-
-		shouldSend, err := showPreviewPrompt(content)
-		if err != nil {
-			log.Printf("preview failed: %v", err)
-			continue
-		}
-
-		if shouldSend {
-			err := api.PostTweet(ctx, content, tokenResp.AccessToken)
-			if err != nil {
-				fmt.Printf(Failed("[ERROR] "), "error posting tweet: %v\n", err)
-			} else {
-				fmt.Println("\U00002705 Post Successful!")
-			}
+	for _, word := range words[1:] {
+		if len(currentLine)+len(word)+1 > width {
+			lines = append(lines, currentLine)
+			currentLine = word
 		} else {
-			fmt.Println("\U0000274C Post discarded.")
+			currentLine += " " + word
 		}
 	}
+
+	lines = append(lines, currentLine)
+	return strings.Join(lines, "\n")
 }
 
-func wrapText(text string, lineWidth int) string {
-	text = strings.TrimSpace(text)
-	paragraphs := strings.Split(text, "\n\n")
-	wrappedParagraphs := []string{}
+func showPreviewPrompt(content interface{}) (bool, error) {
+	var displayText string
 
-	for _, paragraph := range paragraphs {
-		if strings.TrimSpace(paragraph) == "" {
-			wrappedParagraphs = append(wrappedParagraphs, "")
-
-			continue
-		}
-
-		originalLines := strings.Split(paragraph, "\n")
-		wrappedLines := []string{}
-
-		for _, line := range originalLines {
-			words := strings.Fields(line)
-
-			if len(words) == 0 {
-				wrappedLines = append(wrappedLines, "")
-
-				continue
-			}
-
-			currentLine := words[0]
-
-			for _, word := range words[1:] {
-				if len(currentLine)+len(word)+1 > lineWidth {
-					wrappedLines = append(wrappedLines, currentLine)
-					currentLine = word
-				} else {
-					currentLine += " " + word
-				}
-			}
-
-			wrappedLines = append(wrappedLines, currentLine)
-		}
-
-		wrappedParagraphs = append(wrappedParagraphs, strings.Join(wrappedLines, "\n"))
+	switch v := content.(type) {
+	case string:
+		displayText = v
+	case []string:
+		displayText = strings.Join(v, "\n---\n")
+	default:
+		return false, errors.New("unsupported type: must be string or []string")
 	}
 
-	return strings.Join(wrappedParagraphs, "\n\n")
-}
+	previewPrompt := promptui.Select{
+		Label: fmt.Sprintf("Preview Tweet:\n%s\n\nSend this tweet?", displayText),
+		Items: []string{"Send", "Discard"},
+		Templates: &promptui.SelectTemplates{
+			Label:    "{{ . }}",
+			Active:   "-> {{ . | cyan }}",
+			Inactive: "  {{ . | white }}",
+			Selected: "\U0001F44D {{ . | green }}",
+		},
+	}
 
-func showPreviewPrompt(content string) (bool, error) {
-	wrappedContent := wrapText(content, 60)
+	idx, _, err := previewPrompt.Run()
+	if err != nil {
+		return false, fmt.Errorf("failed to execute prompt: %w", err)
+	}
 
-	fmt.Println("\nPost Preview:")
-	fmt.Println("--------------------------------------------------")
-	fmt.Println(wrappedContent)
-	fmt.Println("--------------------------------------------------")
-	fmt.Println("")
-
-	for {
-		prompt := promptui.Select{
-			Label: "Choose an action",
-			Items: []string{"Send Post", "Discard"},
-			Templates: &promptui.SelectTemplates{
-				Label:    "{{ . }}?",
-				Active:   "\U0001F449 {{ . | cyan }}",
-				Inactive: "  {{ . | white }}",
-				Selected: "\U0001F680 {{ . | green }}",
-				Details:  "",
-				Help:     "",
-				FuncMap:  nil,
-			},
-		}
-
-		_, selectedAction, err := prompt.Run()
-		if err != nil {
-
-			return false, fmt.Errorf("preview selection failed: %w", err)
-		}
-
-		switch selectedAction {
-		case "Send Post":
-
-			return true, nil
-		case "Discard":
-
-			return false, nil
-		}
-
-		confirmPrompt := promptui.Prompt{
-			Label:     "Press Enter to continue",
-			IsConfirm: true,
-		}
-		_, err = confirmPrompt.Run()
-		if err != nil {
-
-			return false, err
-		}
+	switch idx {
+	case 0: // Send
+		return true, nil
+	default: // Discard
+		return false, nil
 	}
 }
