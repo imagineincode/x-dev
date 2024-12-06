@@ -47,7 +47,7 @@ func StartCallbackServer(ctx context.Context, wGroup *sync.WaitGroup, authState 
 		defer wGroup.Done()
 
 		if err := callbackServer.ListenAndServe(); err != http.ErrServerClosed {
-			log.Printf("HTTP server error: %v", err)
+			log.Printf("[ERROR] HTTP server error: %v", err)
 		}
 	}()
 
@@ -56,7 +56,7 @@ func StartCallbackServer(ctx context.Context, wGroup *sync.WaitGroup, authState 
 		shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		if err := callbackServer.Shutdown(shutdownCtx); err != nil {
-			log.Printf("server shutdown error: %v", err)
+			log.Printf("[ERROR] server shutdown error: %v", err)
 		}
 	}()
 }
@@ -68,7 +68,6 @@ func handleCallback(ctx context.Context, w http.ResponseWriter, r *http.Request,
 
 	if state != authState {
 		http.Error(w, "invalid state parameter", http.StatusBadRequest)
-
 		return
 	}
 
@@ -76,17 +75,16 @@ func handleCallback(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		log.Printf("error writing response: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-
 		return
 	}
 
 	if !models.SendAuthToken(code) {
-		log.Println("Timeout sending auth code")
+		log.Println("[WARN] Timeout sending auth code")
 	}
 
 	go func(ctx context.Context) {
 		if err := callbackServer.Shutdown(ctx); err != nil {
-			log.Printf("error shutting down server: %v", err)
+			log.Printf("[ERROR] error shutting down server: %v", err)
 		}
 	}(ctx)
 }
@@ -148,7 +146,7 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 	return maxPostLength, userResp, nil
 }
 
-func PostTweet(ctx context.Context, text string, accessToken string) (*models.TweetResponse, error) {
+func PostTweet(ctx context.Context, text string, accessToken string) (*models.PostResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -194,7 +192,7 @@ func PostTweet(ctx context.Context, text string, accessToken string) (*models.Tw
 			resp.StatusCode, string(body))
 	}
 
-	var tweetResp models.TweetResponse
+	var tweetResp models.PostResponse
 	if err := json.Unmarshal(body, &tweetResp); err != nil {
 		return nil, fmt.Errorf("error unmarshaling tweet response: %w", err)
 	}
@@ -202,7 +200,7 @@ func PostTweet(ctx context.Context, text string, accessToken string) (*models.Tw
 	return &tweetResp, nil
 }
 
-func PostThreadTweet(ctx context.Context, tweetReq models.TweetRequest, accessToken string) (*models.TweetResponse, error) {
+func SendReplyPost(ctx context.Context, tweetReq models.TweetRequest, accessToken string) (*models.PostResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -243,7 +241,7 @@ func PostThreadTweet(ctx context.Context, tweetReq models.TweetRequest, accessTo
 			resp.StatusCode, string(body))
 	}
 
-	var tweetResp models.TweetResponse
+	var tweetResp models.PostResponse
 	if err := json.Unmarshal(body, &tweetResp); err != nil {
 		return nil, fmt.Errorf("error unmarshaling tweet response: %w", err)
 	}

@@ -30,7 +30,7 @@ type TweetRequest struct {
 	Reply *ReplyDetails `json:"reply,omitempty"`
 }
 
-type TweetResponse struct {
+type PostResponse struct {
 	Data struct {
 		ID string `json:"id"`
 	} `json:"data"`
