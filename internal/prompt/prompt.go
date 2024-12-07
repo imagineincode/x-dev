@@ -156,12 +156,12 @@ func runMainPrompt(lastPostID *models.LastPostID) (string, error) {
 }
 
 func showPreviewPrompt(content string) (int, error) {
-	wrappedContent := wrapText(content, 100)
+	wrappedContent := wrapText(content, 60)
 
 	fmt.Println("\nPost Preview:")
-	fmt.Println("---------------------------------------------------------------------------------------------------")
+	fmt.Println("------------------------------------------------------------")
 	fmt.Println(wrappedContent)
-	fmt.Println("---------------------------------------------------------------------------------------------------")
+	fmt.Println("------------------------------------------------------------")
 	fmt.Println("")
 
 	prompt := promptui.Select{
