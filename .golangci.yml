@@ -18,6 +18,11 @@ linters:
     - whitespace
     - tagliatelle
     - exportloopref
+    - lll
+    - gci
+    - gofumpt
+    - nlreturn
+    - gocognit
 
 output:
   formats:

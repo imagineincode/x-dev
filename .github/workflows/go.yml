@@ -11,7 +11,9 @@ on:
     tags:
       - 'v*'
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - "main"
+      - "staging"
   release:
     types: [published]
 
@@ -112,13 +114,13 @@ jobs:
         # Create gnupg directory with correct permissions
         mkdir -p ~/.gnupg
         chmod 700 ~/.gnupg
-    
+
         # Use echo to import the key and handle potential Windows line endings
         echo "$GPG_PRIVATE_KEY" | tr -d '\r' | gpg --batch --import
-  
+
         # List secret keys to verify import
         gpg --batch --list-secret-keys
-        
+
     - name: Sign Binary
       env:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
