@@ -71,9 +71,6 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 				} else {
 					postID := postResponse.Data.ID
 					fmt.Println("\U00002705 Post Successful! Post ID: ", postID)
-					if lastPostID == nil {
-						lastPostID = &models.LastPostID{}
-					}
 					lastPostID.InReplyToPostID = postID
 				}
 			case 1:
@@ -117,7 +114,6 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 				} else {
 					postID := postResponse.Data.ID
 					fmt.Println("\U00002705 Posting to Thread Successful! Post ID: ", postID)
-					lastPostID.InReplyToPostID = postID
 				}
 			case 1:
 				fmt.Println("\U0000274C Post discarded.")
@@ -126,7 +122,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 			}
 
 		case "Exit":
-			fmt.Println(Success("[OK] "), "exiting editor...")
+			fmt.Println(Success("[OK] "), "exiting x-yapper...")
 			return nil
 		default:
 			return nil
@@ -149,9 +145,6 @@ func runMainPrompt(lastPostID *models.LastPostID) (string, error) {
 			Active:   "-> {{ . | cyan }}",
 			Inactive: "  {{ . | white }}",
 			Selected: "\U0001F44D {{ . | green }}",
-			Details:  "",
-			Help:     "",
-			FuncMap:  nil,
 		},
 	}
 
@@ -179,9 +172,6 @@ func showPreviewPrompt(content string) (int, error) {
 			Active:   "-> {{ . | cyan }}",
 			Inactive: "  {{ . | white }}",
 			Selected: "\U0001F680 {{ . | green }}",
-			Details:  "",
-			Help:     "",
-			FuncMap:  nil,
 		},
 	}
 

@@ -63,7 +63,7 @@ func main() {
 	u.RawQuery = q.Encode()
 	authURL := u.String()
 
-	fmt.Printf("\nPlease open this URL in your browser to authorize the application:\n\n%s\n\n", authURL)
+	fmt.Printf("\nOpen this URL in your browser to authorize the application:\n\n%s\n\n", authURL)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
