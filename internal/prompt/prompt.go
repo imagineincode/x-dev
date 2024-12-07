@@ -30,7 +30,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 	fmt.Println()
 	fmt.Println()
 
-	var lastPostID *models.LastPostID = &models.LastPostID{InReplyToPostID: ""}
+	var lastPostID = &models.LastPostID{InReplyToPostID: ""}
 
 	for {
 		userSelection, err := runMainPrompt(lastPostID)
