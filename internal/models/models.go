@@ -21,13 +21,15 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-type ReplyDetails struct {
-	InReplyToTweetID string `json:"in_reply_to_tweet_id"`
-}
-
-type TweetRequest struct {
-	Text  string        `json:"text"`
-	Reply *ReplyDetails `json:"reply,omitempty"`
+type UserResponse struct {
+	Data struct {
+		ID               string `json:"id"`
+		Name             string `json:"name"`
+		Username         string `json:"username"`
+		MostRecentPostID string `json:"most_recent_tweet_id"`
+		Verified         bool   `json:"verified"`
+		VerifiedType     string `json:"verified_type"`
+	} `json:"data"`
 }
 
 type PostResponse struct {
@@ -36,15 +38,13 @@ type PostResponse struct {
 	} `json:"data"`
 }
 
-type UserResponse struct {
-	Data struct {
-		ID                string `json:"id"`
-		Name              string `json:"name"`
-		Username          string `json:"username"`
-		MostRecentTweetID string `json:"most_recent_tweet_id"`
-		Verified          bool   `json:"verified"`
-		VerifiedType      string `json:"verified_type"`
-	} `json:"data"`
+type LastPostID struct {
+	InReplyToPostID string `json:"in_reply_to_tweet_id"`
+}
+
+type ThreadPost struct {
+	Text  string      `json:"text"`
+	Reply *LastPostID `json:"reply,omitempty"`
 }
 
 func SendAuthToken(code string) bool {

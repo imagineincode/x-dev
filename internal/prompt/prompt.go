@@ -27,15 +27,19 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 	}
 	showHeader()
 	fmt.Println(Success("[OK] ") + fmt.Sprintf("authenticated as %v (@%v)", userResponse.Data.Name, userResponse.Data.Username))
-	createSpace()
+	fmt.Println()
+	fmt.Println()
+
+	var lastPostID *models.LastPostID = &models.LastPostID{InReplyToPostID: ""}
+
 	for {
-		userSelection, err := runMainPrompt()
+		userSelection, err := runMainPrompt(lastPostID)
 		if err != nil {
 			return fmt.Errorf("main prompt failed: %w", err)
 		}
 
 		switch userSelection {
-		case 0:
+		case "Start New Post":
 			content, err := editor.OpenEditor(ctx)
 			if err != nil {
 				fmt.Println(Failed("[ERROR] "), err)
@@ -48,7 +52,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 			}
 
 			if len(content) > maxPostLength {
-				fmt.Println(Failed("[ERROR] "), "tweet exceeds maximum length of", maxPostLength, "characters.")
+				fmt.Println(Failed("[ERROR] "), "post exceeds maximum length of", maxPostLength, "characters.")
 				continue
 			}
 
@@ -61,19 +65,67 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 			switch previewResponse {
 			case 0:
 				var postResponse *models.PostResponse
-				postResponse, err = api.PostTweet(ctx, content, tokenResp.AccessToken)
+				postResponse, err = api.SendPost(ctx, content, tokenResp.AccessToken)
 				if err != nil {
 					fmt.Printf(Failed("[ERROR] "), "error in post response: %v\n", err)
 				} else {
 					postID := postResponse.Data.ID
 					fmt.Println("\U00002705 Post Successful! Post ID: ", postID)
+					if lastPostID == nil {
+						lastPostID = &models.LastPostID{}
+					}
+					lastPostID.InReplyToPostID = postID
 				}
 			case 1:
 				fmt.Println("\U0000274C Post discarded.")
 			default:
 				continue
 			}
-		case 2:
+		case "Add Post to Latest Thread":
+			threadContent, err := editor.OpenEditor(ctx)
+			if err != nil {
+				fmt.Println(Failed("[ERROR] "), err)
+				return nil
+			}
+
+			if strings.TrimSpace(threadContent) == "" {
+				fmt.Println(Warn("[WARN] "), "No content entered. Returning to main prompt.")
+				continue
+			}
+
+			if len(threadContent) > maxPostLength {
+				fmt.Println(Failed("[ERROR] "), "post exceeds maximum length of", maxPostLength, "characters.")
+				continue
+			}
+
+			previewResponse, err := showPreviewPrompt(threadContent)
+			if err != nil {
+				fmt.Println(Failed("[ERROR] "), err)
+				continue
+			}
+
+			switch previewResponse {
+			case 0:
+				threadPost := &models.ThreadPost{
+					Text:  threadContent,
+					Reply: lastPostID,
+				}
+				var postResponse *models.PostResponse
+				postResponse, err = api.SendReplyPost(ctx, threadPost, tokenResp.AccessToken)
+				if err != nil {
+					fmt.Printf(Failed("[ERROR] "), "error in post response: %v\n", err)
+				} else {
+					postID := postResponse.Data.ID
+					fmt.Println("\U00002705 Posting to Thread Successful! Post ID: ", postID)
+					lastPostID.InReplyToPostID = postID
+				}
+			case 1:
+				fmt.Println("\U0000274C Post discarded.")
+			default:
+				continue
+			}
+
+		case "Exit":
 			fmt.Println(Success("[OK] "), "exiting editor...")
 			return nil
 		default:
@@ -82,10 +134,16 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 	} // end, return to main menu
 }
 
-func runMainPrompt() (int, error) {
+func runMainPrompt(lastPostID *models.LastPostID) (string, error) {
+	mainPromptOptions := []string{"Start New Post", "Exit"}
+
+	if lastPostID != nil && lastPostID.InReplyToPostID != "" {
+		mainPromptOptions = append(mainPromptOptions[:1], append([]string{"Add Post to Latest Thread"}, mainPromptOptions[1:]...)...)
+	}
+
 	prompt := promptui.Select{
 		Label: "Choose an action",
-		Items: []string{"Start New Post", "Add Post to Latest Thead", "Exit"},
+		Items: mainPromptOptions,
 		Templates: &promptui.SelectTemplates{
 			Label:    "{{ . }}?",
 			Active:   "-> {{ . | cyan }}",
@@ -97,20 +155,20 @@ func runMainPrompt() (int, error) {
 		},
 	}
 
-	idx, _, err := prompt.Run()
+	_, userSelection, err := prompt.Run()
 	if err != nil {
-		return 2, fmt.Errorf("prompt failed: %w", err)
+		return "", fmt.Errorf("prompt failed: %w", err)
 	}
-	return idx, nil
+	return userSelection, nil
 }
 
 func showPreviewPrompt(content string) (int, error) {
 	wrappedContent := wrapText(content, 100)
 
 	fmt.Println("\nPost Preview:")
-	fmt.Println("--------------------------------------------------")
+	fmt.Println("---------------------------------------------------------------------------------------------------")
 	fmt.Println(wrappedContent)
-	fmt.Println("--------------------------------------------------")
+	fmt.Println("---------------------------------------------------------------------------------------------------")
 	fmt.Println("")
 
 	prompt := promptui.Select{
@@ -137,43 +195,48 @@ func showPreviewPrompt(content string) (int, error) {
 
 func wrapText(text string, lineWidth int) string {
 	text = strings.TrimSpace(text)
-	paragraphs := strings.Split(text, "\n\n")
-	wrappedParagraphs := []string{}
-
-	for _, paragraph := range paragraphs {
-		if strings.TrimSpace(paragraph) == "" {
-			wrappedParagraphs = append(wrappedParagraphs, "")
-			continue
-		}
-
-		originalLines := strings.Split(paragraph, "\n")
-		wrappedLines := []string{}
-
-		for _, line := range originalLines {
-			words := strings.Fields(line)
-
-			if len(words) == 0 {
-				wrappedLines = append(wrappedLines, "")
-				continue
-			}
-
-			currentLine := words[0]
-
-			for _, word := range words[1:] {
-				if len(currentLine)+len(word)+1 > lineWidth {
-					wrappedLines = append(wrappedLines, currentLine)
-					currentLine = word
-				} else {
-					currentLine += " " + word
-				}
-			}
-
-			wrappedLines = append(wrappedLines, currentLine)
-		}
-
-		wrappedParagraphs = append(wrappedParagraphs, strings.Join(wrappedLines, "\n"))
+	if text == "" {
+		return ""
 	}
-	return strings.Join(wrappedParagraphs, "\n\n")
+
+	var wrapped strings.Builder
+	paragraphs := strings.Split(text, "\n\n")
+
+	for i, paragraph := range paragraphs {
+		if i > 0 {
+			wrapped.WriteString("\n\n")
+		}
+
+		lines := breakParagraphIntoLines(paragraph, lineWidth)
+		wrapped.WriteString(strings.Join(lines, "\n"))
+	}
+
+	return wrapped.String()
+}
+
+func breakParagraphIntoLines(paragraph string, lineWidth int) []string {
+	words := strings.Fields(paragraph)
+	if len(words) == 0 {
+		return []string{}
+	}
+
+	var lines []string
+	currentLine := words[0]
+
+	for _, word := range words[1:] {
+		if len(currentLine+" "+word) > lineWidth {
+			lines = append(lines, currentLine)
+			currentLine = word
+		} else {
+			currentLine += " " + word
+		}
+	}
+
+	if currentLine != "" {
+		lines = append(lines, currentLine)
+	}
+
+	return lines
 }
 
 func showHeader() {
@@ -184,10 +247,5 @@ func showHeader() {
      //\ \
     //  \ \
      yapper`)
-	fmt.Println()
-}
-
-func createSpace() {
-	fmt.Println()
 	fmt.Println()
 }
