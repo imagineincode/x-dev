@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -67,7 +68,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 				var postResponse *models.PostResponse
 				postResponse, err = api.SendPost(ctx, content, tokenResp.AccessToken)
 				if err != nil {
-					fmt.Printf(Failed("[ERROR] "), "error in post response: %v\n", err)
+					fmt.Println(Failed("[ERROR] "), "error in post response: ", err)
 				} else {
 					postID := postResponse.Data.ID
 					fmt.Println("\U00002705 Post Successful! Post ID: ", postID)
@@ -110,7 +111,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 				var postResponse *models.PostResponse
 				postResponse, err = api.SendReplyPost(ctx, threadPost, tokenResp.AccessToken)
 				if err != nil {
-					fmt.Printf(Failed("[ERROR] "), "error in post response: %v\n", err)
+					fmt.Println(Failed("[ERROR] "), "error in post response: ", err)
 				} else {
 					postID := postResponse.Data.ID
 					fmt.Println("\U00002705 Posting to Thread Successful! Post ID: ", postID)
@@ -123,12 +124,25 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 
 		case "Show Timeline":
 			var timelineResponse *models.TimelineResponse
-			timelineResponse, err = api.GetHomeTimeline(ctx, userResponse.Data.ID, tokenResp.AccessToken)
+			var rateLimit *models.RateLimitInfo
+			timelineResponse, rateLimit, err = api.GetHomeTimeline(ctx, userResponse.Data.ID, tokenResp.AccessToken)
 			if err != nil {
 				fmt.Println(Failed("[ERROR] "), "error in timeline response:", err)
 			} else {
-				metaData := timelineResponse.Meta
-				fmt.Println("\U00002705 Retrieved timeline: ", metaData)
+				if rateLimit != nil {
+					rateLimitJSON, err := json.MarshalIndent(rateLimit, "", "  ")
+					if err != nil {
+						fmt.Println("Error marshaling rate limit info:", err)
+					} else {
+						fmt.Println("\nRate Limit Information:")
+						fmt.Println(string(rateLimitJSON))
+					}
+				}
+				timelineRespBytes, err := json.MarshalIndent(timelineResponse, "", "  ")
+				if err != nil {
+					fmt.Println("error formatting timelineResp JSON: ", err)
+				}
+				fmt.Println(string(timelineRespBytes))
 			}
 
 		case "Exit":

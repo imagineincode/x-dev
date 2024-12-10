@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 const (
 	AuthEndpoint     = "https://twitter.com/i/oauth2/authorize"
@@ -75,6 +78,23 @@ type Media struct {
 	MediaKey string `json:"media_key"`
 	Type     string `json:"type"`
 	URL      string `json:"url,omitempty"`
+}
+
+type RateLimitError struct {
+	Info           *RateLimitInfo
+	ResponseBody   string
+	RetryAfterSecs int
+}
+
+type RateLimitInfo struct {
+	Remaining int
+	Limit     int
+	ResetTime time.Time
+}
+
+func (e *RateLimitError) Error() string {
+	return fmt.Sprintf("Rate limit exceeded. Retry after %d seconds. Details: %s",
+		e.RetryAfterSecs, e.ResponseBody)
 }
 
 func SendAuthToken(code string) bool {
