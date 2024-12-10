@@ -121,6 +121,16 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 				continue
 			}
 
+		case "Show Timeline":
+			var timelineResponse *models.TimelineResponse
+			timelineResponse, err = api.GetHomeTimeline(ctx, userResponse.Data.ID, tokenResp.AccessToken)
+			if err != nil {
+				fmt.Println(Failed("[ERROR] "), "error in timeline response:", err)
+			} else {
+				metaData := timelineResponse.Meta
+				fmt.Println("\U00002705 Retrieved timeline: ", metaData)
+			}
+
 		case "Exit":
 			fmt.Println(Success("[OK] "), "exiting x-yapper...")
 			return nil
@@ -131,7 +141,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 }
 
 func runMainPrompt(lastPostID *models.LastPostID) (string, error) {
-	mainPromptOptions := []string{"Start New Post", "Exit"}
+	mainPromptOptions := []string{"Start New Post", "Show Timeline", "Exit"}
 
 	if lastPostID != nil && lastPostID.InReplyToPostID != "" {
 		mainPromptOptions = append(mainPromptOptions[:1], append([]string{"Add Post to Latest Thread"}, mainPromptOptions[1:]...)...)

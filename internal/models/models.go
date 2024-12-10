@@ -47,6 +47,36 @@ type ThreadPost struct {
 	Reply *LastPostID `json:"reply,omitempty"`
 }
 
+type TimelineResponse struct {
+	PostData []Tweet `json:"data"`
+	Includes struct {
+		Users []User  `json:"users,omitempty"`
+		Media []Media `json:"media,omitempty"`
+	} `json:"includes,omitempty"`
+	Meta map[string]interface{} `json:"meta"`
+}
+
+type Tweet struct {
+	ID            string              `json:"id"`
+	Text          string              `json:"text"`
+	AuthorID      string              `json:"author_id"`
+	CreatedAt     string              `json:"created_at"`
+	Attachments   map[string][]string `json:"attachments,omitempty"`
+	PublicMetrics map[string]int      `json:"public_metrics,omitempty"`
+}
+
+type User struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Username string `json:"username"`
+}
+
+type Media struct {
+	MediaKey string `json:"media_key"`
+	Type     string `json:"type"`
+	URL      string `json:"url,omitempty"`
+}
+
 func SendAuthToken(code string) bool {
 	select {
 	case AuthTokenChan <- code:
