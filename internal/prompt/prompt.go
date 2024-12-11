@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -11,7 +13,10 @@ import (
 	"x-dev/internal/config"
 	"x-dev/internal/models"
 
+	"github.com/dustin/go-humanize"
+	"github.com/eiannone/keyboard"
 	"github.com/manifoldco/promptui"
+	"golang.org/x/term"
 )
 
 var (
@@ -67,14 +72,25 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 			switch previewResponse {
 			case 0:
 				var postResponse *models.PostResponse
-				postResponse, err = api.SendPost(ctx, content, tokenResp.AccessToken)
+				var rateLimit *models.RateLimitInfo
+				postResponse, rateLimit, err = api.SendPost(ctx, content, tokenResp.AccessToken)
 				if err != nil {
 					fmt.Println(Failed("[ERROR] "), "error in post response: ", err)
 				} else {
 					postID := postResponse.Data.ID
 					fmt.Println("\U00002705 Post Successful! Post ID: ", postID)
 					lastPostID.InReplyToPostID = postID
+
 				}
+				if rateLimit != nil {
+					rateLimitJSON, err := json.MarshalIndent(rateLimit, "", "  ")
+					if err != nil {
+						fmt.Println("Error marshaling rate limit info:", err)
+					} else {
+						fmt.Println(string(rateLimitJSON))
+					}
+				}
+
 			case 1:
 				fmt.Println("\U0000274C Post discarded.")
 			default:
@@ -109,16 +125,29 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 					Text:  threadContent,
 					Reply: lastPostID,
 				}
+
 				var postResponse *models.PostResponse
-				postResponse, err = api.SendReplyPost(ctx, threadPost, tokenResp.AccessToken)
+				var rateLimit *models.RateLimitInfo
+				postResponse, rateLimit, err = api.SendReplyPost(ctx, threadPost, tokenResp.AccessToken)
 				if err != nil {
 					fmt.Println(Failed("[ERROR] "), "error in post response: ", err)
 				} else {
 					postID := postResponse.Data.ID
 					fmt.Println("\U00002705 Posting to Thread Successful! Post ID: ", postID)
 				}
+
+				if rateLimit != nil {
+					rateLimitJSON, err := json.MarshalIndent(rateLimit, "", "  ")
+					if err != nil {
+						fmt.Println("Error marshaling rate limit info.", err)
+					} else {
+						fmt.Println(string(rateLimitJSON))
+					}
+				}
+
 			case 1:
 				fmt.Println("\U0000274C Post discarded.")
+
 			default:
 				continue
 			}
@@ -128,79 +157,27 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 			var rateLimit *models.RateLimitInfo
 			timelineResponse, rateLimit, err = api.GetHomeTimeline(ctx, userResponse.Data.ID, tokenResp.AccessToken)
 			if err != nil {
-				fmt.Println(Failed("[ERROR] "), "error in timeline response:", err)
+				fmt.Println(Failed("[ERROR] "), "error in timeline response.", err)
 			} else {
-				if rateLimit != nil {
-					rateLimitJSON, err := json.MarshalIndent(rateLimit, "", "  ")
-					if err != nil {
-						fmt.Println("Error marshaling rate limit info:", err)
-					} else {
-						fmt.Println("\nRate Limit Information:")
-						fmt.Println(string(rateLimitJSON))
-					}
+				err = paginatePosts(timelineResponse)
+				if err != nil {
+					fmt.Println(Failed("[ERROR] "), "error in timeline response.", err)
 				}
-				fmt.Println("𝕏 Timeline")
-				fmt.Println("")
-				for _, tweet := range timelineResponse.PostData {
-					fmt.Printf("Post ID: %s ", tweet.ID)
-					fmt.Printf("Author ID: %s\n", tweet.AuthorID)
-					createdTime, err := time.Parse(time.RFC3339, tweet.CreatedAt)
-					if err != nil {
-						fmt.Printf("Created: %s (error parsing time: %v)\n", tweet.CreatedAt, err)
-					} else {
-						fmt.Printf("Created: %s\n", createdTime.Local().Format("Monday, January 2, 2006 at 3:04 PM MST"))
-						//fmt.Printf("Created: %s\n", humanize.Time(createdTime))
-					}
+			}
 
-					fmt.Println("Post:")
-					fmt.Printf("%s\n", tweet.Text)
-
-					if tweet.PublicMetrics != nil {
-						emojiMap := map[string]string{
-							"like_count":       "♡",
-							"retweet_count":    "🔁",
-							"reply_count":      "💬",
-							"bookmark_count":   "⛉",
-							"impression_count": "👀",
-						}
-
-						metricOrder := []string{
-							"reply_count",
-							"retweet_count",
-							"like_count",
-							"impression_count",
-							"bookmark_count",
-						}
-
-						fmt.Println("\n------------------------------------------------------------")
-						for _, metricName := range metricOrder {
-							if metricValue, exists := tweet.PublicMetrics[metricName]; exists {
-								if emoji, emojiExists := emojiMap[metricName]; emojiExists {
-									fmt.Printf("  %s %d    ", emoji, metricValue)
-								} else {
-									fmt.Printf("  %s: %d ", metricName, metricValue)
-								}
-							}
-						}
-						fmt.Println("\n------------------------------------------------------------")
-					}
-
-					// if tweet.Attachments != nil {
-					// 	fmt.Println("Attachments:")
-					// 	for key, values := range tweet.Attachments {
-					// 		fmt.Printf("  %s:", key)
-					// 		for _, value := range values {
-					// 			fmt.Printf(" %s", value)
-					// 		}
-					// 		fmt.Println()
-					// 	}
-					// }
+			if rateLimit != nil {
+				rateLimitJSON, err := json.MarshalIndent(rateLimit, "", "  ")
+				if err != nil {
+					fmt.Println("Error marshaling rate limit info.", err)
+				} else {
+					fmt.Println(string(rateLimitJSON))
 				}
 			}
 
 		case "Exit":
 			fmt.Println(Success("[OK] "), "exiting x-yapper...")
 			return nil
+
 		default:
 			return nil
 		}
@@ -258,6 +235,164 @@ func showPreviewPrompt(content string) (int, error) {
 	}
 
 	return idx, nil
+}
+
+func paginatePosts(timelineResponse *models.TimelineResponse) error {
+	// Get terminal height
+	_, terminalHeight, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		terminalHeight = 24 // fallback to a standard terminal height
+	}
+
+	availableHeight := terminalHeight - 5
+	if availableHeight < 10 {
+		availableHeight = 10
+	}
+
+	// Open keyboard for reading
+	if err := keyboard.Open(); err != nil {
+		return fmt.Errorf("could not open keyboard: %v", err)
+	}
+	defer keyboard.Close()
+
+	// Prepare the posts content
+	var postContents []string
+	for _, tweet := range timelineResponse.PostData {
+		var content strings.Builder
+
+		// Post header
+		content.WriteString(fmt.Sprintf("Post ID: %s Author ID: %s\n", tweet.ID, tweet.AuthorID))
+
+		// Created time
+		createdTime, err := time.Parse(time.RFC3339, tweet.CreatedAt)
+		if err != nil {
+			content.WriteString(fmt.Sprintf("Created: %s (error parsing time: %v)", tweet.CreatedAt, err))
+		} else {
+			content.WriteString(fmt.Sprintf("Created: (%s) %s",
+				humanize.Time(createdTime),
+				createdTime.Local().Format("Mon, Jan. 2, 2006 at 3:04 PM MST")))
+		}
+
+		// Post text
+		wrappedPostContent := wrapText(tweet.Text, 60)
+		content.WriteString("\n------------------------------------------------------------\n")
+		content.WriteString(wrappedPostContent)
+
+		// Attachments
+		content.WriteString("Attachments:\n")
+		for key, values := range tweet.Attachments.MediaKeys {
+			attachmentLine := fmt.Sprintf("  %d:", key)
+			for _, value := range values {
+				attachmentLine += fmt.Sprintf(" %v", value)
+			}
+			content.WriteString(attachmentLine)
+		}
+
+		// Public Metrics
+		if !reflect.DeepEqual(tweet.PublicMetrics, struct{}{}) {
+			emojiMap := map[string]string{
+				"like_count":       "♡",
+				"retweet_count":    "🔁",
+				"reply_count":      "💬",
+				"bookmark_count":   "⛉",
+				"impression_count": "👀",
+			}
+
+			metricOrder := []string{
+				"reply_count",
+				"retweet_count",
+				"like_count",
+				"impression_count",
+				"bookmark_count",
+			}
+
+			content.WriteString("\n------------------------------------------------------------\n")
+			var metricLine string
+			metricValues := reflect.ValueOf(tweet.PublicMetrics)
+			metricType := metricValues.Type()
+
+			for _, metricName := range metricOrder {
+				// Find the field by name
+				for i := 0; i < metricValues.NumField(); i++ {
+					if strings.ToLower(metricType.Field(i).Name) == strings.ReplaceAll(metricName, "_", "") {
+						metricValue := metricValues.Field(i).Interface().(int)
+
+						// Only add to metricLine if the value is non-zero
+						if metricValue > 0 {
+							if emoji, emojiExists := emojiMap[metricName]; emojiExists {
+								metricLine += fmt.Sprintf("  %s %d    ", emoji, metricValue)
+							} else {
+								metricLine += fmt.Sprintf("  %s: %d ", metricName, metricValue)
+							}
+						}
+						break
+					}
+				}
+			}
+			content.WriteString(metricLine)
+			content.WriteString("\n------------------------------------------------------------\n\n")
+
+			postContents = append(postContents, content.String())
+		}
+	}
+
+	// Prepare pages with multiple tweets
+	var pages []string
+	var currentPage strings.Builder
+	var currentPageLineCount int
+
+	for _, postContent := range postContents {
+		// Count lines in this tweet
+		postLines := strings.Split(postContent, "\n")
+
+		// Check if adding this tweet would exceed page height
+		if currentPageLineCount+len(postLines) > availableHeight {
+			// Current page is full, save it and start a new page
+			pages = append(pages, currentPage.String())
+			currentPage.Reset()
+			currentPageLineCount = 0
+		}
+
+		// Add tweet to current page
+		currentPage.WriteString(postContent)
+		currentPageLineCount += len(postLines)
+	}
+
+	// Add last page if not empty
+	if currentPage.Len() > 0 {
+		pages = append(pages, currentPage.String())
+	}
+
+	// Navigate through pages
+	for pageIndex := 0; pageIndex < len(pages); pageIndex++ {
+		// Clear screen
+		fmt.Print("\033[H\033[2J")
+
+		// Print header
+		fmt.Println("𝕏 Timeline - Page %d of %d "+Info("(Space: Next, Q: Quit)")+"\n\n",
+			pageIndex+1, len(pages))
+
+		// Print current page
+		fmt.Print(pages[pageIndex])
+
+		// Wait for user input
+		char, key, err := keyboard.GetSingleKey()
+		if err != nil {
+			return fmt.Errorf("error reading keyboard: %v", err)
+		}
+
+		// Check for quit
+		if key == keyboard.KeyCtrlC || char == 'q' || char == 'Q' {
+			break
+		}
+
+		// If not space or last page, break
+		if key != keyboard.KeySpace && pageIndex < len(pages)-1 {
+			break
+		}
+	}
+
+	return nil
 }
 
 func wrapText(text string, lineWidth int) string {

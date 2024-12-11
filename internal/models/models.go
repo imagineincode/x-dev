@@ -24,6 +24,15 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type User struct {
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Username         string `json:"username"`
+	MostRecentPostID string `json:"most_recent_tweet_id"`
+	Verified         bool   `json:"verified"`
+	VerifiedType     string `json:"verified_type"`
+}
+
 type UserResponse struct {
 	Data struct {
 		ID               string `json:"id"`
@@ -55,32 +64,39 @@ type TimelineResponse struct {
 	Includes struct {
 		Users []User  `json:"users,omitempty"`
 		Media []Media `json:"media,omitempty"`
-	} `json:"includes,omitempty"`
-	Meta map[string]interface{} `json:"meta"`
+	} `json:"includes"`
+	Meta struct {
+		NewestID    string `json:"newest_id"`
+		NextToken   string `json:"next_token"`
+		OldestID    string `json:"oldest_id"`
+		ResultCount int    `json:"result_count"`
+	} `json:"meta"`
 }
 
 type Tweet struct {
-	ID            string              `json:"id"`
-	Text          string              `json:"text"`
-	AuthorID      string              `json:"author_id"`
-	CreatedAt     string              `json:"created_at"`
-	Attachments   map[string][]string `json:"attachments,omitempty"`
-	PublicMetrics map[string]int      `json:"public_metrics,omitempty"`
-}
+	ID        string `json:"id"`
+	Text      string `json:"text"`
+	AuthorID  string `json:"author_id"`
+	CreatedAt string `json:"created_at"`
 
-type User struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Username string `json:"username"`
+	Attachments *struct {
+		MediaKeys []string `json:"media_keys,omitempty"`
+	} `json:"attachments,omitempty"`
+
+	PublicMetrics struct {
+		BookmarkCount   int `json:"bookmark_count"`
+		ImpressionCount int `json:"impression_count"`
+		LikeCount       int `json:"like_count"`
+		QuoteCount      int `json:"quote_count"`
+		ReplyCount      int `json:"reply_count"`
+		RetweetCount    int `json:"retweet_count"`
+	} `json:"public_metrics"`
 }
 
 type Media struct {
-	MediaKey      string `json:"media_key"`
-	Type          string `json:"type"`
-	URL           string `json:"url,omitempty"`
-	PublicMetrics struct {
-		ViewCount int `json:"view_count"`
-	} `json:"public_metrics"`
+	MediaKey string `json:"media_key"`
+	Type     string `json:"type"`
+	URL      string `json:"url,omitempty"`
 }
 
 type RateLimitError struct {
