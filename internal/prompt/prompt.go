@@ -140,10 +140,10 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 					}
 				}
 				fmt.Println("𝕏 Timeline")
+				fmt.Println("")
 				for _, tweet := range timelineResponse.PostData {
 					fmt.Printf("Post ID: %s ", tweet.ID)
 					fmt.Printf("Author ID: %s\n", tweet.AuthorID)
-					//fmt.Printf("Created At: %s\n", tweet.CreatedAt)
 					createdTime, err := time.Parse(time.RFC3339, tweet.CreatedAt)
 					if err != nil {
 						fmt.Printf("Created: %s (error parsing time: %v)\n", tweet.CreatedAt, err)
@@ -151,7 +151,9 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 						fmt.Printf("Created: %s\n", createdTime.Local().Format("Monday, January 2, 2006 at 3:04 PM MST"))
 						//fmt.Printf("Created: %s\n", humanize.Time(createdTime))
 					}
-					fmt.Printf(tweet.Text)
+
+					fmt.Println("Post:")
+					fmt.Printf("%s\n", tweet.Text)
 
 					if tweet.PublicMetrics != nil {
 						emojiMap := map[string]string{
@@ -170,7 +172,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 							"bookmark_count",
 						}
 
-						fmt.Println("------------------------------------------------------------")
+						fmt.Println("\n------------------------------------------------------------")
 						for _, metricName := range metricOrder {
 							if metricValue, exists := tweet.PublicMetrics[metricName]; exists {
 								if emoji, emojiExists := emojiMap[metricName]; emojiExists {
