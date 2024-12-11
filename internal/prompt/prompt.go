@@ -11,7 +11,6 @@ import (
 	"x-dev/internal/config"
 	"x-dev/internal/models"
 
-	"github.com/dustin/go-humanize"
 	"github.com/manifoldco/promptui"
 )
 
@@ -140,40 +139,60 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 						fmt.Println(string(rateLimitJSON))
 					}
 				}
-				fmt.Println("𝕏 Timeline:")
+				fmt.Println("𝕏 Timeline")
 				for _, tweet := range timelineResponse.PostData {
-					fmt.Println("------------------------------------------------------------")
-					// fmt.Printf("\nTweet %d:\n", i+1)
-					fmt.Printf("Post ID: %s\n", tweet.ID)
+					fmt.Printf("Post ID: %s ", tweet.ID)
 					fmt.Printf("Author ID: %s\n", tweet.AuthorID)
 					//fmt.Printf("Created At: %s\n", tweet.CreatedAt)
 					createdTime, err := time.Parse(time.RFC3339, tweet.CreatedAt)
 					if err != nil {
-						fmt.Printf("Created At: %s (error parsing time: %v)\n", tweet.CreatedAt, err)
+						fmt.Printf("Created: %s (error parsing time: %v)\n", tweet.CreatedAt, err)
 					} else {
-						//fmt.Printf("Created At: %s\n", createdTime.Local().Format("Monday, January 2, 2006 at 3:04 PM MST"))
-						fmt.Printf("Created At: %s\n", humanize.Time(createdTime))
+						fmt.Printf("Created: %s\n", createdTime.Local().Format("Monday, January 2, 2006 at 3:04 PM MST"))
+						//fmt.Printf("Created: %s\n", humanize.Time(createdTime))
 					}
-					fmt.Printf("Content: %s\n", tweet.Text)
+					fmt.Printf(tweet.Text)
 
 					if tweet.PublicMetrics != nil {
-						fmt.Println("Metrics:")
-						for metricName, metricValue := range tweet.PublicMetrics {
-							fmt.Printf("  %s: %d\n", metricName, metricValue)
+						emojiMap := map[string]string{
+							"like_count":       "♡",
+							"retweet_count":    "🔁",
+							"reply_count":      "💬",
+							"bookmark_count":   "⛉",
+							"impression_count": "👀",
 						}
+
+						metricOrder := []string{
+							"reply_count",
+							"retweet_count",
+							"like_count",
+							"impression_count",
+							"bookmark_count",
+						}
+
+						fmt.Println("------------------------------------------------------------")
+						for _, metricName := range metricOrder {
+							if metricValue, exists := tweet.PublicMetrics[metricName]; exists {
+								if emoji, emojiExists := emojiMap[metricName]; emojiExists {
+									fmt.Printf("  %s %d    ", emoji, metricValue)
+								} else {
+									fmt.Printf("  %s: %d ", metricName, metricValue)
+								}
+							}
+						}
+						fmt.Println("\n------------------------------------------------------------")
 					}
 
-					if tweet.Attachments != nil {
-						fmt.Println("Attachments:")
-						for key, values := range tweet.Attachments {
-							fmt.Printf("  %s:", key)
-							for _, value := range values {
-								fmt.Printf(" %s", value)
-							}
-							fmt.Println()
-						}
-					}
-					fmt.Println("------------------------------------------------------------")
+					// if tweet.Attachments != nil {
+					// 	fmt.Println("Attachments:")
+					// 	for key, values := range tweet.Attachments {
+					// 		fmt.Printf("  %s:", key)
+					// 		for _, value := range values {
+					// 			fmt.Printf(" %s", value)
+					// 		}
+					// 		fmt.Println()
+					// 	}
+					// }
 				}
 			}
 
