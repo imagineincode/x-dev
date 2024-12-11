@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"x-dev/internal/api"
 	"x-dev/internal/config"
 	"x-dev/internal/models"
 
+	"github.com/dustin/go-humanize"
 	"github.com/manifoldco/promptui"
 )
 
@@ -138,11 +140,41 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 						fmt.Println(string(rateLimitJSON))
 					}
 				}
-				timelineRespBytes, err := json.MarshalIndent(timelineResponse, "", "  ")
-				if err != nil {
-					fmt.Println("error formatting timelineResp JSON: ", err)
+				fmt.Println("𝕏 Timeline:")
+				for _, tweet := range timelineResponse.PostData {
+					fmt.Println("------------------------------------------------------------")
+					// fmt.Printf("\nTweet %d:\n", i+1)
+					fmt.Printf("Post ID: %s\n", tweet.ID)
+					fmt.Printf("Author ID: %s\n", tweet.AuthorID)
+					//fmt.Printf("Created At: %s\n", tweet.CreatedAt)
+					createdTime, err := time.Parse(time.RFC3339, tweet.CreatedAt)
+					if err != nil {
+						fmt.Printf("Created At: %s (error parsing time: %v)\n", tweet.CreatedAt, err)
+					} else {
+						//fmt.Printf("Created At: %s\n", createdTime.Local().Format("Monday, January 2, 2006 at 3:04 PM MST"))
+						fmt.Printf("Created At: %s\n", humanize.Time(createdTime))
+					}
+					fmt.Printf("Content: %s\n", tweet.Text)
+
+					if tweet.PublicMetrics != nil {
+						fmt.Println("Metrics:")
+						for metricName, metricValue := range tweet.PublicMetrics {
+							fmt.Printf("  %s: %d\n", metricName, metricValue)
+						}
+					}
+
+					if tweet.Attachments != nil {
+						fmt.Println("Attachments:")
+						for key, values := range tweet.Attachments {
+							fmt.Printf("  %s:", key)
+							for _, value := range values {
+								fmt.Printf(" %s", value)
+							}
+							fmt.Println()
+						}
+					}
+					fmt.Println("------------------------------------------------------------")
 				}
-				fmt.Println(string(timelineRespBytes))
 			}
 
 		case "Exit":

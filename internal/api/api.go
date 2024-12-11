@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"x-dev/internal/models"
-	"x-dev/internal/prompt"
 )
 
 var callbackServer *http.Server
@@ -51,7 +50,7 @@ func StartCallbackServer(ctx context.Context, wGroup *sync.WaitGroup, authState 
 		defer wGroup.Done()
 
 		if err := callbackServer.ListenAndServe(); err != http.ErrServerClosed {
-			fmt.Println(prompt.Failed("[ERROR]"), "HTTP server error: ", err)
+			fmt.Println("[ERROR] HTTP server error: ", err)
 		}
 	}()
 
@@ -60,7 +59,7 @@ func StartCallbackServer(ctx context.Context, wGroup *sync.WaitGroup, authState 
 		shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		if err := callbackServer.Shutdown(shutdownCtx); err != nil {
-			fmt.Println(prompt.Failed("[ERROR]"), "server shutdown error: ", err)
+			fmt.Println("[ERROR] server shutdown error: ", err)
 		}
 	}()
 }
@@ -77,18 +76,18 @@ func handleCallback(ctx context.Context, w http.ResponseWriter, r *http.Request,
 
 	_, err := w.Write([]byte("Authorization successful! You can close this window."))
 	if err != nil {
-		fmt.Println(prompt.Failed("[ERROR] "), "error writing response: ", err)
+		fmt.Println("[ERROR] error writing response: ", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	if !models.SendAuthToken(code) {
-		fmt.Println(prompt.Warn("[WARN] "), "Timeout sending auth code")
+		fmt.Println("[WARN] timeout sending auth code")
 	}
 
 	go func(ctx context.Context) {
 		if err := callbackServer.Shutdown(ctx); err != nil {
-			fmt.Println(prompt.Failed("[ERROR]"), "error shutting down server: ", err)
+			fmt.Println("[ERROR] error shutting down server: ", err)
 		}
 	}(ctx)
 }
@@ -259,7 +258,7 @@ func SendReplyPost(ctx context.Context, threadPost *models.ThreadPost, accessTok
 
 func GetHomeTimeline(ctx context.Context, userID string, accessToken string) (*models.TimelineResponse, *models.RateLimitInfo, error) {
 	timelineURL := fmt.Sprintf("https://api.twitter.com/2/users/%s/timelines/reverse_chronological", userID)
-	maxResults := 5
+	maxResults := 10
 	tweetFields := []string{"attachments", "author_id", "created_at", "id", "public_metrics", "text"}
 	userFields := []string{"id", "name", "username", "verified"}
 

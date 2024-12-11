@@ -75,9 +75,12 @@ type User struct {
 }
 
 type Media struct {
-	MediaKey string `json:"media_key"`
-	Type     string `json:"type"`
-	URL      string `json:"url,omitempty"`
+	MediaKey      string `json:"media_key"`
+	Type          string `json:"type"`
+	URL           string `json:"url,omitempty"`
+	PublicMetrics struct {
+		ViewCount int `json:"view_count"`
+	} `json:"public_metrics"`
 }
 
 type RateLimitError struct {
