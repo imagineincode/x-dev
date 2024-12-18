@@ -149,7 +149,7 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 	return maxPostLength, userResp, nil
 }
 
-func SendPost(ctx context.Context, text string, accessToken string) (*models.PostResponse, *models.RateLimitInfo, error) {
+func SendPost(ctx context.Context, text string, accessToken string) (*models.Tweet, *models.RateLimitInfo, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -200,7 +200,7 @@ func SendPost(ctx context.Context, text string, accessToken string) (*models.Pos
 			resp.StatusCode, string(body))
 	}
 
-	var postResp models.PostResponse
+	var postResp models.Tweet
 	if err := json.Unmarshal(body, &postResp); err != nil {
 		return nil, rateLimitInfo, fmt.Errorf("error unmarshaling post response: %w", err)
 	}
@@ -208,7 +208,7 @@ func SendPost(ctx context.Context, text string, accessToken string) (*models.Pos
 	return &postResp, rateLimitInfo, nil
 }
 
-func SendReplyPost(ctx context.Context, threadPost *models.ThreadPost, accessToken string) (*models.PostResponse, *models.RateLimitInfo, error) {
+func SendReplyPost(ctx context.Context, threadPost *models.ThreadPost, accessToken string) (*models.Tweet, *models.RateLimitInfo, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -258,7 +258,7 @@ func SendReplyPost(ctx context.Context, threadPost *models.ThreadPost, accessTok
 			resp.StatusCode, string(body))
 	}
 
-	var postResp models.PostResponse
+	var postResp models.Tweet
 	if err := json.Unmarshal(body, &postResp); err != nil {
 		return nil, rateLimitInfo, fmt.Errorf("error unmarshaling post response: %w", err)
 	}
@@ -268,7 +268,7 @@ func SendReplyPost(ctx context.Context, threadPost *models.ThreadPost, accessTok
 
 func GetHomeTimeline(ctx context.Context, userID string, accessToken string) (*models.TimelineResponse, *models.RateLimitInfo, error) {
 	timelineURL := fmt.Sprintf("https://api.twitter.com/2/users/%s/timelines/reverse_chronological", userID)
-	maxResults := 10
+	maxResults := 25
 	userFields := []string{"id", "name", "username", "verified", "verified_type"}
 	tweetFields := []string{"attachments", "author_id", "created_at", "id", "public_metrics", "text", "edit_history_tweet_ids", "referenced_tweets", "entities"}
 	expansions := []string{"author_id", "attachments.media_keys"}
@@ -318,7 +318,7 @@ func GetHomeTimeline(ctx context.Context, userID string, accessToken string) (*m
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, rateLimitInfo, fmt.Errorf("status code: %d, response: %s",
+		return nil, rateLimitInfo, fmt.Errorf("status code: %d, api response: %s",
 			resp.StatusCode, string(bodyBytes))
 	}
 
