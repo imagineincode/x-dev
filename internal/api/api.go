@@ -8,7 +8,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,7 +50,7 @@ func StartCallbackServer(ctx context.Context, wGroup *sync.WaitGroup, authState 
 		defer wGroup.Done()
 
 		if err := callbackServer.ListenAndServe(); err != http.ErrServerClosed {
-			log.Printf("[ERROR] HTTP server error: %v", err)
+			fmt.Println("[ERROR] HTTP server error: ", err)
 		}
 	}()
 
@@ -56,7 +59,7 @@ func StartCallbackServer(ctx context.Context, wGroup *sync.WaitGroup, authState 
 		shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		if err := callbackServer.Shutdown(shutdownCtx); err != nil {
-			log.Printf("[ERROR] server shutdown error: %v", err)
+			fmt.Println("[ERROR] server shutdown error: ", err)
 		}
 	}()
 }
@@ -73,18 +76,18 @@ func handleCallback(ctx context.Context, w http.ResponseWriter, r *http.Request,
 
 	_, err := w.Write([]byte("Authorization successful! You can close this window."))
 	if err != nil {
-		log.Printf("error writing response: %v", err)
+		fmt.Println("[ERROR] error writing response: ", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	if !models.SendAuthToken(code) {
-		log.Println("[WARN] Timeout sending auth code")
+		fmt.Println("[WARN] timeout sending auth code")
 	}
 
 	go func(ctx context.Context) {
 		if err := callbackServer.Shutdown(ctx); err != nil {
-			log.Printf("[ERROR] error shutting down server: %v", err)
+			fmt.Println("[ERROR] error shutting down server: ", err)
 		}
 	}(ctx)
 }
@@ -146,7 +149,7 @@ func CheckAccountType(ctx context.Context, accessToken string) (int, models.User
 	return maxPostLength, userResp, nil
 }
 
-func SendPost(ctx context.Context, text string, accessToken string) (*models.PostResponse, error) {
+func SendPost(ctx context.Context, text string, accessToken string) (*models.Tweet, *models.RateLimitInfo, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -155,12 +158,12 @@ func SendPost(ctx context.Context, text string, accessToken string) (*models.Pos
 
 	jsonData, err := json.Marshal(postReq)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling post request: %w", err)
+		return nil, nil, fmt.Errorf("error marshaling post request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, postURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return nil, nil, fmt.Errorf("error creating request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -181,26 +184,31 @@ func SendPost(ctx context.Context, text string, accessToken string) (*models.Pos
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
+		return nil, nil, fmt.Errorf("error sending request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	rateLimitInfo, err := extractRateLimitInfo(resp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error extracting rate limit info: %w", err)
+	}
 
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error posting, status code: %d, response: %s",
+		return nil, rateLimitInfo, fmt.Errorf("error posting, status code: %d, response: %s",
 			resp.StatusCode, string(body))
 	}
 
-	var postResp models.PostResponse
+	var postResp models.Tweet
 	if err := json.Unmarshal(body, &postResp); err != nil {
-		return nil, fmt.Errorf("error unmarshaling post response: %w", err)
+		return nil, rateLimitInfo, fmt.Errorf("error unmarshaling post response: %w", err)
 	}
 
-	return &postResp, nil
+	return &postResp, rateLimitInfo, nil
 }
 
-func SendReplyPost(ctx context.Context, threadPost *models.ThreadPost, accessToken string) (*models.PostResponse, error) {
+func SendReplyPost(ctx context.Context, threadPost *models.ThreadPost, accessToken string) (*models.Tweet, *models.RateLimitInfo, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -208,12 +216,12 @@ func SendReplyPost(ctx context.Context, threadPost *models.ThreadPost, accessTok
 
 	jsonData, err := json.Marshal(threadPost)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling post request: %w", err)
+		return nil, nil, fmt.Errorf("error marshaling post request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, postURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return nil, nil, fmt.Errorf("error creating request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -226,25 +234,131 @@ func SendReplyPost(ctx context.Context, threadPost *models.ThreadPost, accessTok
 			MaxIdleConnsPerHost: 10,
 			IdleConnTimeout:     90 * time.Second,
 		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return nil
+		},
+		Jar: nil,
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
+		return nil, nil, fmt.Errorf("error sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 
+	rateLimitInfo, err := extractRateLimitInfo(resp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error extracting rate limit info: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error posting, status code: %d, response: %s",
+		return nil, rateLimitInfo, fmt.Errorf("error posting, status code: %d, response: %s",
 			resp.StatusCode, string(body))
 	}
 
-	var postResp models.PostResponse
+	var postResp models.Tweet
 	if err := json.Unmarshal(body, &postResp); err != nil {
-		return nil, fmt.Errorf("error unmarshaling post response: %w", err)
+		return nil, rateLimitInfo, fmt.Errorf("error unmarshaling post response: %w", err)
 	}
 
-	return &postResp, nil
+	return &postResp, rateLimitInfo, nil
+}
+
+func GetHomeTimeline(ctx context.Context, userID string, accessToken string) (*models.TimelineResponse, *models.RateLimitInfo, error) {
+	timelineURL := fmt.Sprintf("https://api.twitter.com/2/users/%s/timelines/reverse_chronological", userID)
+	maxResults := 25
+	userFields := []string{"id", "name", "username", "verified", "verified_type"}
+	tweetFields := []string{"attachments", "author_id", "created_at", "id", "public_metrics", "text", "edit_history_tweet_ids", "referenced_tweets", "entities"}
+	expansions := []string{"author_id", "attachments.media_keys"}
+
+	query := url.Values{}
+	query.Set("max_results", strconv.Itoa(maxResults))
+	query.Set("tweet.fields", strings.Join(tweetFields, ","))
+	query.Set("user.fields", strings.Join(userFields, ","))
+	query.Set("expansions", strings.Join(expansions, ","))
+
+	fullURL := fmt.Sprintf("%s?%s", timelineURL, query.Encode())
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating user request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return nil
+		},
+		Jar: nil,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error sending user request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	rateLimitInfo, err := extractRateLimitInfo(resp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error extracting rate limit info: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, rateLimitInfo, fmt.Errorf("status code: %d, api response: %s",
+			resp.StatusCode, string(bodyBytes))
+	}
+
+	var timelineResp models.TimelineResponse
+	if err := json.NewDecoder(resp.Body).Decode(&timelineResp); err != nil {
+		return nil, rateLimitInfo, fmt.Errorf("error decoding user response: %w", err)
+	}
+
+	return &timelineResp, rateLimitInfo, nil
+}
+
+func extractRateLimitInfo(resp *http.Response) (*models.RateLimitInfo, error) {
+	remainingStr := resp.Header.Get("X-Rate-Limit-Remaining")
+	limitStr := resp.Header.Get("X-Rate-Limit-Limit")
+	resetStr := resp.Header.Get("X-Rate-Limit-Reset")
+
+	if remainingStr == "" || limitStr == "" || resetStr == "" {
+		return &models.RateLimitInfo{}, nil
+	}
+
+	remaining, err := strconv.Atoi(remainingStr)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing remaining rate limit: %w", err)
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing rate limit: %w", err)
+	}
+
+	resetTimestamp, err := strconv.ParseInt(resetStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing rate limit reset timestamp: %w", err)
+	}
+
+	resetTime := time.Unix(resetTimestamp, 0)
+
+	return &models.RateLimitInfo{
+		Remaining: remaining,
+		Limit:     limit,
+		ResetTime: resetTime,
+	}, nil
 }
