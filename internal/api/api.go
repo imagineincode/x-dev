@@ -274,7 +274,7 @@ func GetHomeTimeline(ctx context.Context, userID string, accessToken string) (*m
 	expansions := []string{"author_id", "attachments.media_keys"}
 
 	query := url.Values{}
-	query.Set("max_results", fmt.Sprintf("%d", maxResults))
+	query.Set("max_results", strconv.Itoa(maxResults))
 	query.Set("tweet.fields", strings.Join(tweetFields, ","))
 	query.Set("user.fields", strings.Join(userFields, ","))
 	query.Set("expansions", strings.Join(expansions, ","))
@@ -336,7 +336,7 @@ func extractRateLimitInfo(resp *http.Response) (*models.RateLimitInfo, error) {
 	resetStr := resp.Header.Get("X-Rate-Limit-Reset")
 
 	if remainingStr == "" || limitStr == "" || resetStr == "" {
-		return nil, nil
+		return &models.RateLimitInfo{}, nil
 	}
 
 	remaining, err := strconv.Atoi(remainingStr)

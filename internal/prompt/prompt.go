@@ -36,7 +36,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 	fmt.Println()
 	fmt.Println()
 
-	var lastPostID = &models.LastPostID{InReplyToPostID: ""}
+	lastPostID := &models.LastPostID{InReplyToPostID: ""}
 
 	for {
 		userSelection, err := runMainPrompt(lastPostID)
@@ -416,9 +416,12 @@ func formatPublicMetrics(tweet models.Tweet) string {
 	metricType := metricValues.Type()
 
 	for _, metricName := range metricOrder {
-		for i := 0; i < metricValues.NumField(); i++ {
+		for i := range metricValues.NumField() {
 			if strings.ToLower(metricType.Field(i).Name) == strings.ReplaceAll(metricName, "_", "") {
-				metricValue := metricValues.Field(i).Interface().(int)
+				metricValue, ok := metricValues.Field(i).Interface().(int)
+				if !ok {
+					continue
+				}
 
 				if emoji, emojiExists := emojiMap[metricName]; emojiExists {
 					metricLine += fmt.Sprintf("  %s %d    ", emoji, metricValue)
@@ -477,7 +480,7 @@ func paginateTweetContents(postContents []string, availableHeight int) []string 
 
 func paginatePosts(timelineResponse *models.TimelineResponse) error {
 	if err := keyboard.Open(); err != nil {
-		return fmt.Errorf("could not open keyboard: %v", err)
+		return fmt.Errorf("could not open keyboard: %w", err)
 	}
 	defer keyboard.Close()
 
@@ -495,7 +498,7 @@ func paginatePosts(timelineResponse *models.TimelineResponse) error {
 }
 
 func displayPages(pages []string) error {
-	for pageIndex := 0; pageIndex < len(pages); pageIndex++ {
+	for pageIndex := range pages {
 		fmt.Print("\033[H\033[2J")
 
 		fmt.Printf("𝕏 Timeline - Page %d of %d (Space: Next, Q: Quit)\n\n", pageIndex+1, len(pages))
@@ -504,7 +507,7 @@ func displayPages(pages []string) error {
 
 		char, key, err := keyboard.GetSingleKey()
 		if err != nil {
-			return fmt.Errorf("error reading keyboard: %v", err)
+			return fmt.Errorf("error reading keyboard: %w", err)
 		}
 
 		if key == keyboard.KeyCtrlC || char == 'q' || char == 'Q' {
