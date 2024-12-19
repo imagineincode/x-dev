@@ -36,10 +36,13 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 	fmt.Println()
 	fmt.Println()
 
-	lastPostID := &models.LastPostID{InReplyToPostID: ""}
+	latestPost := &models.LatestPost{
+		PostID: "",
+		Text:   "",
+	}
 
 	for {
-		userSelection, err := runMainPrompt(lastPostID)
+		userSelection, err := runMainPrompt(latestPost)
 		if err != nil {
 			return fmt.Errorf("main prompt failed: %w", err)
 		}
@@ -70,15 +73,16 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 
 			switch previewResponse {
 			case 0:
-				var postResponse *models.Tweet
+				var postResponse *models.PostResponse
 				var rateLimit *models.RateLimitInfo
 				postResponse, rateLimit, err = api.SendPost(ctx, content, tokenResp.AccessToken)
 				if err != nil {
 					fmt.Println(Failed("[ERROR] "), err)
 				} else {
-					postID := postResponse.ID
+					postID := postResponse.Data.ID
 					fmt.Println("\U00002705 Post Successful! Post ID: ", postID)
-					lastPostID.InReplyToPostID = postID
+					latestPost.PostID = postID
+					latestPost.Text = content
 				}
 				rateLimitStatus := rateLimitStatus(rateLimit)
 
@@ -94,39 +98,42 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 
 			}
 		case "Add post to latest thread":
-			threadContent, err := editor.OpenEditor(ctx)
+			content, err := editor.OpenEditor(ctx)
 			if err != nil {
 				fmt.Println(Failed("[ERROR] "), err)
 			}
 
-			if strings.TrimSpace(threadContent) == "" {
+			if strings.TrimSpace(content) == "" {
 				fmt.Println(Warn("[WARN] "), "No content entered. Returning to main prompt.")
 			}
 
-			if len(threadContent) > maxPostLength {
+			if len(content) > maxPostLength {
 				fmt.Println(Failed("[ERROR] "), "post exceeds maximum length of", maxPostLength, "characters.")
 			}
 
-			previewResponse, err := showPreviewPrompt(threadContent)
+			previewResponse, err := showPreviewPrompt(content)
 			if err != nil {
 				fmt.Println(Failed("[ERROR] "), err)
 			}
 
 			switch previewResponse {
 			case 0:
-				threadPost := &models.ThreadPost{
-					Text:  threadContent,
-					Reply: lastPostID,
+				replyToPostID := &models.Reply{ReplyID: latestPost.PostID}
+				threadPost := &models.ReplyPost{
+					Text:  content,
+					Reply: replyToPostID,
 				}
 
-				var postResponse *models.Tweet
+				var postResponse *models.PostResponse
 				var rateLimit *models.RateLimitInfo
 				postResponse, rateLimit, err = api.SendReplyPost(ctx, threadPost, tokenResp.AccessToken)
 				if err != nil {
 					fmt.Println(Failed("[ERROR] "), err)
 				} else {
-					postID := postResponse.ID
+					postID := postResponse.Data.ID
 					fmt.Println("\U00002705 Posting to Thread Successful! Post ID: ", postID)
+					latestPost.PostID = postID
+					latestPost.Text = content
 				}
 
 				rateLimitStatus := rateLimitStatus(rateLimit)
@@ -172,7 +179,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 	} // end, return to main menu
 }
 
-func runMainPrompt(lastPostID *models.LastPostID) (string, error) {
+func runMainPrompt(latestPost *models.LatestPost) (string, error) {
 	type PromptOption struct {
 		Name    string
 		Details string
@@ -185,8 +192,11 @@ func runMainPrompt(lastPostID *models.LastPostID) (string, error) {
 		},
 		{
 			Name: "Show timeline",
-			Details: fmt.Sprintf("  View recent posts and interactions\n  %s Your x-developer account type has a limit of 1 request every 15 minutes for the timeline endpoint.",
-				Warn("[WARN]")),
+			Details: fmt.Sprintf(
+				"  View recent posts and interactions\n  "+
+					"%s x-developer free tier has a limit of 1 request every 15 minutes for the timeline endpoint.\n  "+
+					"%s x-developer free tier has a limit of 100 post pulls a month for the timeline endpoint.",
+				Warn("[WARN]"), Warn("[WARN]")),
 		},
 		{
 			Name:    "Exit",
@@ -194,11 +204,18 @@ func runMainPrompt(lastPostID *models.LastPostID) (string, error) {
 		},
 	}
 
-	if lastPostID != nil && lastPostID.InReplyToPostID != "" {
+	if latestPost.Text != "" {
+		wrappedText := wrapText(latestPost.Text, 60)
 		mainPromptOptions = append(mainPromptOptions[:1], append([]PromptOption{
 			{
-				Name:    "Add post to latest thread",
-				Details: "  Reply to the most recently created thread",
+				Name: "Add post to latest thread",
+				Details: fmt.Sprintf(
+					"  Reply to the most recently created thread\n"+
+						"  Post ID: %s\n"+
+						"------------------------------------------------------------\n"+
+						"%s\n"+
+						"------------------------------------------------------------",
+					latestPost.PostID, wrappedText),
 			},
 		}, mainPromptOptions[1:]...)...)
 	}
@@ -251,12 +268,60 @@ func showPreviewPrompt(content string) (int, error) {
 	return idx, nil
 }
 
+func paginatePosts(timelineResponse *models.TimelineResponse) error {
+	if err := keyboard.Open(); err != nil {
+		return fmt.Errorf("could not open keyboard: %w", err)
+	}
+	defer keyboard.Close()
+
+	userMap := mapUsersFromTimelineResponse(timelineResponse.Includes.Users)
+
+	var postContents []string
+	for _, tweet := range timelineResponse.Data {
+		postContents = append(postContents, formatTweetContent(tweet, userMap))
+	}
+
+	availableHeight := calculateAvailablePageHeight()
+	pages := paginateTweetContents(postContents, availableHeight)
+
+	return displayPages(pages)
+}
+
 func mapUsersFromTimelineResponse(users []models.User) map[string]*models.User {
 	userMap := make(map[string]*models.User)
+	if len(users) == 0 {
+		return userMap
+	}
+
 	for i := range users {
-		userMap[users[i].ID] = &users[i]
+		user := users[i]
+		userMap[user.ID] = &user
 	}
 	return userMap
+}
+
+func displayPages(pages []string) error {
+	for pageIndex := range pages {
+		fmt.Print("\033[H\033[2J")
+
+		fmt.Printf("𝕏 Timeline - Page %d of %d (Space: Next, Q: Quit)\n\n", pageIndex+1, len(pages))
+
+		fmt.Print(pages[pageIndex])
+
+		char, key, err := keyboard.GetSingleKey()
+		if err != nil {
+			return fmt.Errorf("error reading keyboard: %w", err)
+		}
+
+		if key == keyboard.KeyCtrlC || char == 'q' || char == 'Q' {
+			break
+		}
+
+		if key != keyboard.KeySpace && pageIndex < len(pages)-1 {
+			break
+		}
+	}
+	return nil
 }
 
 func formatTweetContent(tweet models.Tweet, userMap map[string]*models.User) string {
@@ -308,7 +373,7 @@ func formatReferenceTweetType(tweet models.Tweet) string {
 		refTweetType = "new post"
 	}
 
-	return fmt.Sprintf("Type: %s\n", refTweetType)
+	return fmt.Sprintf("Type: %s | PostID: %s\n", refTweetType, tweet.ID)
 }
 
 func formatAttachments(tweet models.Tweet) string {
@@ -332,7 +397,7 @@ func formatURLs(tweet models.Tweet) string {
 	}
 
 	var urls strings.Builder
-	urls.WriteString("URLs:\n")
+	urls.WriteString("\nURLs :\n")
 	for _, url := range tweet.Entities.URLs {
 		urlLine := fmt.Sprintf("  URL: %s\n  Expanded URL: %s\n", url.URL, url.ExpandedURL)
 		urls.WriteString(urlLine)
@@ -478,49 +543,6 @@ func paginateTweetContents(postContents []string, availableHeight int) []string 
 	return pages
 }
 
-func paginatePosts(timelineResponse *models.TimelineResponse) error {
-	if err := keyboard.Open(); err != nil {
-		return fmt.Errorf("could not open keyboard: %w", err)
-	}
-	defer keyboard.Close()
-
-	userMap := mapUsersFromTimelineResponse(timelineResponse.Includes.Users)
-
-	var postContents []string
-	for _, tweet := range timelineResponse.Data {
-		postContents = append(postContents, formatTweetContent(tweet, userMap))
-	}
-
-	availableHeight := calculateAvailablePageHeight()
-	pages := paginateTweetContents(postContents, availableHeight)
-
-	return displayPages(pages)
-}
-
-func displayPages(pages []string) error {
-	for pageIndex := range pages {
-		fmt.Print("\033[H\033[2J")
-
-		fmt.Printf("𝕏 Timeline - Page %d of %d (Space: Next, Q: Quit)\n\n", pageIndex+1, len(pages))
-
-		fmt.Print(pages[pageIndex])
-
-		char, key, err := keyboard.GetSingleKey()
-		if err != nil {
-			return fmt.Errorf("error reading keyboard: %w", err)
-		}
-
-		if key == keyboard.KeyCtrlC || char == 'q' || char == 'Q' {
-			break
-		}
-
-		if key != keyboard.KeySpace && pageIndex < len(pages)-1 {
-			break
-		}
-	}
-	return nil
-}
-
 func rateLimitStatus(rateLimit *models.RateLimitInfo) string {
 	resetTime := rateLimit.ResetTime.Format("Jan 2 at 3:04 PM")
 
@@ -530,7 +552,7 @@ func rateLimitStatus(rateLimit *models.RateLimitInfo) string {
 			rateLimit.Remaining,
 			resetTime)
 	} else if rateLimit.Remaining == 0 {
-		return fmt.Sprintf("%s Rate limit exceeded for the timeline endpoint. Resets on %s.",
+		return fmt.Sprintf("%s Rate limit exceeded for this endpoint. Resets on %s.",
 			Warn("[WARN]"),
 			resetTime)
 	}
