@@ -24,9 +24,40 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-type ThreadPost struct {
-	Text  string      `json:"text"`
-	Reply *LastPostID `json:"reply,omitempty"`
+type UserResponse struct {
+	Data struct {
+		ID               string `json:"id"`
+		Name             string `json:"name"`
+		Username         string `json:"username"`
+		MostRecentPostID string `json:"most_recent_tweet_id"`
+		Verified         bool   `json:"verified"`
+		VerifiedType     string `json:"verified_type"`
+	} `json:"data"`
+}
+
+type Post struct {
+	Text string `json:"text"`
+}
+
+type PostResponse struct {
+	Data struct {
+		ID   string `json:"id"`
+		Text string `json:"text"`
+	} `json:"data"`
+}
+
+type LatestPost struct {
+	Text   string `json:"text"`
+	PostID string `json:"post_id"`
+}
+
+type Reply struct {
+	ReplyID string `json:"in_reply_to_tweet_id,omitempty"`
+}
+
+type ReplyPost struct {
+	Text  string `json:"text"`
+	Reply *Reply `json:"reply,omitempty"`
 }
 
 type TimelineResponse struct {
@@ -50,21 +81,6 @@ type User struct {
 	MostRecentPostID string `json:"most_recent_tweet_id"`
 	Verified         bool   `json:"verified"`
 	VerifiedType     string `json:"verified_type,omitempty"`
-}
-
-type UserResponse struct {
-	Data struct {
-		ID               string `json:"id"`
-		Name             string `json:"name"`
-		Username         string `json:"username"`
-		MostRecentPostID string `json:"most_recent_tweet_id"`
-		Verified         bool   `json:"verified"`
-		VerifiedType     string `json:"verified_type"`
-	} `json:"data"`
-}
-
-type LastPostID struct {
-	InReplyToPostID string `json:"in_reply_to_tweet_id"`
 }
 
 type Tweet struct {
