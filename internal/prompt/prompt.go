@@ -118,7 +118,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 
 			switch previewResponse {
 			case 0:
-				var replyToPostID = &models.Reply{ReplyID: latestPost.PostID}
+				replyToPostID := &models.Reply{ReplyID: latestPost.PostID}
 				threadPost := &models.ReplyPost{
 					Text:  content,
 					Reply: replyToPostID,
