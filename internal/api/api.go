@@ -268,7 +268,7 @@ func SendReplyPost(ctx context.Context, threadPost *models.ReplyPost, accessToke
 
 func GetHomeTimeline(ctx context.Context, userID string, accessToken string) (*models.TimelineResponse, *models.RateLimitInfo, error) {
 	timelineURL := fmt.Sprintf("https://api.twitter.com/2/users/%s/timelines/reverse_chronological", userID)
-	maxResults := 2 // change back to default 25
+	maxResults := 25
 	userFields := []string{"id", "name", "username", "verified", "verified_type"}
 	tweetFields := []string{"attachments", "author_id", "created_at", "id", "public_metrics", "text", "edit_history_tweet_ids", "referenced_tweets", "entities"}
 	expansions := []string{"author_id", "attachments.media_keys"}
