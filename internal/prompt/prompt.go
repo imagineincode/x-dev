@@ -79,7 +79,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 				if err != nil {
 					fmt.Println(Failed("[ERROR] "), err)
 				} else {
-					postID := postResponse.Data.ID
+					postID := postResponse.ID
 					fmt.Println("\U00002705 Post Successful! Post ID: ", postID)
 					latestPost.PostID = postID
 					latestPost.Text = content
@@ -130,7 +130,7 @@ func RunPrompts(ctx context.Context, tokenResp *models.TokenResponse, maxPostLen
 				if err != nil {
 					fmt.Println(Failed("[ERROR] "), err)
 				} else {
-					postID := postResponse.Data.ID
+					postID := postResponse.ID
 					fmt.Println("\U00002705 Posting to Thread Successful! Post ID: ", postID)
 					latestPost.PostID = postID
 					latestPost.Text = content

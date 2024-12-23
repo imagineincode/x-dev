@@ -200,7 +200,7 @@ func SendPost(ctx context.Context, text string, accessToken string) (*models.Pos
 			resp.StatusCode, string(body))
 	}
 
-	var postResp models.PostResponse
+	var postResp models.Tweet
 	if err := json.Unmarshal(body, &postResp); err != nil {
 		return nil, rateLimitInfo, fmt.Errorf("error unmarshaling post response: %w", err)
 	}
@@ -258,7 +258,7 @@ func SendReplyPost(ctx context.Context, threadPost *models.ReplyPost, accessToke
 			resp.StatusCode, string(body))
 	}
 
-	var postResp models.PostResponse
+	var postResp models.Tweet
 	if err := json.Unmarshal(body, &postResp); err != nil {
 		return nil, rateLimitInfo, fmt.Errorf("error unmarshaling post response: %w", err)
 	}

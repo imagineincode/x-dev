@@ -24,6 +24,34 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type ThreadPost struct {
+	Text  string      `json:"text"`
+	Reply *LastPostID `json:"reply,omitempty"`
+}
+
+type TimelineResponse struct {
+	Data     []Tweet `json:"data"`
+	Includes struct {
+		Users []User  `json:"users,omitempty"`
+		Media []Media `json:"media,omitempty"`
+	} `json:"includes,omitempty"`
+	Meta struct {
+		NewestID    string `json:"newest_id"`
+		NextToken   string `json:"next_token"`
+		OldestID    string `json:"oldest_id"`
+		ResultCount int    `json:"result_count"`
+	} `json:"meta"`
+}
+
+type User struct {
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Username         string `json:"username"`
+	MostRecentPostID string `json:"most_recent_tweet_id"`
+	Verified         bool   `json:"verified"`
+	VerifiedType     string `json:"verified_type,omitempty"`
+}
+
 type UserResponse struct {
 	Data struct {
 		ID               string `json:"id"`
